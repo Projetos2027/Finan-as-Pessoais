@@ -278,7 +278,12 @@
 
             <!-- Configurar Teto Global de Gastos -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
-                <h3 class="text-lg font-bold text-indigo-600">🎯 Teto Global de Gastos do Mês</h3>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-indigo-600">🎯 Teto Global de Gastos do Mês</h3>
+                    <span id="max-ceiling-badge" class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-semibold">Máximo permitido: R$ 0,00</span>
+                </div>
+                <p class="text-xs text-slate-500">O teto global pode ser no máximo o valor que você recebe no mês menos a fatura do cartão de crédito.</p>
+                
                 <div class="flex flex-col md:flex-row gap-3 items-end">
                     <div class="flex-grow">
                         <label class="block text-xs font-medium text-slate-500 mb-1">Definir Teto Global (R$)</label>
@@ -548,6 +553,44 @@
             return `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
         }
 
+        // Função para calcular a fatura líquida do cartão de crédito de um mês específico
+        async function getCreditCardInvoiceForMonth(targetMonth) {
+            const { data: creditTxs } = await supabaseClient
+                .from('transactions')
+                .select('*')
+                .eq('type', 'expense')
+                .eq('payment_method', 'crédito');
+
+            const { data: abatements } = await supabaseClient
+                .from('credit_abatements')
+                .select('*');
+
+            let totalCredit = 0;
+            if (creditTxs) {
+                creditTxs.forEach(t => {
+                    const numInst = t.installments && t.installments > 0 ? t.installments : 1;
+                    const instAmount = Number(t.amount) / numInst;
+                    const instMonths = getInstallmentMonths(t.date, numInst);
+                    const matched = instMonths.find(im => im.month === targetMonth);
+                    if (matched) {
+                        totalCredit += instAmount;
+                    }
+                });
+            }
+
+            let totalAbat = 0;
+            if (abatements) {
+                abatements.forEach(a => {
+                    const targetM = getTargetMonthFromDate(a.date);
+                    if (targetM === targetMonth) {
+                        totalAbat += Number(a.amount);
+                    }
+                });
+            }
+
+            return Math.max(0, totalCredit - totalAbat);
+        }
+
         // Calcula receitas, despesas e gastos detalhados por categoria para o mês
         async function calculateMonthData(targetMonth) {
             const { data: txs, error: errTxs } = await supabaseClient.from('transactions').select('*');
@@ -667,12 +710,28 @@
             const selectedMonth = document.getElementById('filter-situation-month').value;
             if (!selectedMonth) return;
 
+            const data = await calculateMonthData(selectedMonth);
+            const creditCardInvoice = await getCreditCardInvoiceForMonth(selectedMonth);
+            const maxGlobalCeiling = Math.max(0, data.income - creditCardInvoice);
+
+            // Atualizar badge do limite máximo do teto
+            document.getElementById('max-ceiling-badge').innerText = `Máximo permitido: ${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+
+            // Configurar input max attribute
+            const ceilingInput = document.getElementById('situation-ceiling-input');
+            ceilingInput.max = maxGlobalCeiling;
+
             // Carregar Teto Global do localStorage
             const globalCeilingKey = `budget_global_${currentUser.id}_${selectedMonth}`;
-            const savedGlobalCeiling = localStorage.getItem(globalCeilingKey) || '';
-            document.getElementById('situation-ceiling-input').value = savedGlobalCeiling;
+            let savedGlobalCeiling = localStorage.getItem(globalCeilingKey);
+            
+            // Se o valor salvo exceder o teto máximo permitido, limita ou avisa
+            let globalCeilingVal = parseFloat(savedGlobalCeiling) || 0;
+            if (globalCeilingVal > maxGlobalCeiling) {
+                globalCeilingVal = maxGlobalCeiling;
+            }
+            ceilingInput.value = globalCeilingVal > 0 ? globalCeilingVal : '';
 
-            const data = await calculateMonthData(selectedMonth);
             const balance = data.income - data.expense;
 
             document.getElementById('situation-income').innerText = data.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -692,9 +751,7 @@
             }
 
             // Teto Global / Progresso
-            const globalCeilingVal = parseFloat(savedGlobalCeiling) || 0;
             const spentVal = data.expense;
-
             document.getElementById('ceiling-spent-label').innerText = `Gastos Totais: ${spentVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
 
             const percentLabel = document.getElementById('ceiling-percent-label');
@@ -716,7 +773,7 @@
             } else {
                 percentLabel.innerText = "Nenhum teto global definido";
                 progressBar.style.width = "0%";
-                alertEl.innerText = "Digite um valor acima para acompanhar o limite global.";
+                alertEl.innerText = `Seu teto pode ser de até ${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Receitas R$ ${data.income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - Fatura Cartão R$ ${creditCardInvoice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`;
             }
 
             // Renderizar Tetos por Categoria
@@ -763,10 +820,20 @@
             });
         }
 
-        function saveGlobalCeiling() {
+        async function saveGlobalCeiling() {
             const selectedMonth = document.getElementById('filter-situation-month').value;
-            const ceilingVal = document.getElementById('situation-ceiling-input').value;
+            let ceilingVal = parseFloat(document.getElementById('situation-ceiling-input').value) || 0;
             if (!selectedMonth) return;
+
+            const data = await calculateMonthData(selectedMonth);
+            const creditCardInvoice = await getCreditCardInvoiceForMonth(selectedMonth);
+            const maxGlobalCeiling = Math.max(0, data.income - creditCardInvoice);
+
+            if (ceilingVal > maxGlobalCeiling) {
+                alert(`O teto global não pode exceder o valor recebido no mês menos a fatura do cartão (${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). O valor foi ajustado automaticamente.`);
+                ceilingVal = maxGlobalCeiling;
+                document.getElementById('situation-ceiling-input').value = ceilingVal;
+            }
 
             const ceilingKey = `budget_global_${currentUser.id}_${selectedMonth}`;
             localStorage.setItem(ceilingKey, ceilingVal);
