@@ -26,7 +26,7 @@
     </header>
 
     <!-- Main Container -->
-    <main class="max-w-4xl mx-auto px-4 py-8 flex-grow w-full">
+    <main class="max-w-4xl mx-auto px-4 py-8 flex-grow w-full space-y-6">
 
         <!-- Tela de Autenticação (Login / Cadastro) -->
         <div id="auth-section" class="max-w-md mx-auto bg-white p-8 rounded-xl shadow-sm border border-slate-100">
@@ -148,7 +148,7 @@
                 </form>
             </div>
 
-            <!-- Histórico de Transações -->
+            <!-- Histórico de Transações do Mês -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                 <div class="p-4 border-b border-slate-100 flex justify-between items-center">
                     <h3 class="text-lg font-bold">Histórico de Lançamentos do Mês</h3>
@@ -170,6 +170,17 @@
                             <!-- Preenchido via JavaScript -->
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Projeção de Cartão de Crédito Mês a Mês -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
+                <div class="border-b border-slate-100 pb-3">
+                    <h3 class="text-lg font-bold">💳 Projeção de Cartão de Crédito (Mês a Mês)</h3>
+                    <p class="text-xs text-slate-500">Acompanhe quanto você vai pagar de cartão em cada mês futuro com base nas compras parceladas.</p>
+                </div>
+                <div id="credit-projection-list" class="space-y-3">
+                    <!-- Preenchido via JavaScript -->
                 </div>
             </div>
 
@@ -255,7 +266,6 @@
             const installmentsContainer = document.getElementById('installments-container');
             const paymentMethod = document.getElementById('payment-method').value;
 
-            // Lógica para Receita
             if (type === 'income') {
                 if (recurrence === 'eventual') {
                     targetMonthContainer.classList.remove('hidden');
@@ -266,7 +276,6 @@
                 }
                 installmentsContainer.classList.add('hidden');
             } else {
-                // Lógica para Despesa
                 targetMonthContainer.classList.add('hidden');
                 document.getElementById('target-month').required = false;
 
@@ -315,6 +324,7 @@
             document.getElementById('user-info').classList.remove('hidden');
             document.getElementById('user-email').innerText = currentUser.email;
             loadTransactions();
+            loadCreditProjection();
         }
 
         function showAuth() {
@@ -393,6 +403,91 @@
 
             renderTransactions(processedTransactions);
             calculateSummary(processedTransactions);
+            loadCreditProjection();
+        }
+
+        // Função para carregar a projeção de cartão mês a mês
+        async function loadCreditProjection() {
+            const { data, error } = await supabaseClient
+                .from('transactions')
+                .select('*')
+                .eq('type', 'expense')
+                .eq('payment_method', 'crédito');
+
+            if (error) {
+                console.error('Erro ao carregar projeção de crédito:', error);
+                return;
+            }
+
+            const monthMap = {};
+
+            data.forEach(t => {
+                const numInst = t.installments && t.installments > 0 ? t.installments : 1;
+                const instAmount = Number(t.amount) / numInst;
+                const instMonths = getInstallmentMonths(t.date, numInst);
+
+                instMonths.forEach(im => {
+                    if (!monthMap[im.month]) {
+                        monthMap[im.month] = [];
+                    }
+                    monthMap[im.month].push({
+                        description: t.description,
+                        category: t.category,
+                        amount: instAmount,
+                        installmentText: `${im.installmentNumber}/${numInst}`
+                    });
+                });
+            });
+
+            const sortedMonths = Object.keys(monthMap).sort();
+            const container = document.getElementById('credit-projection-list');
+            container.innerHTML = '';
+
+            if (sortedMonths.length === 0) {
+                container.innerHTML = `<p class="text-sm text-slate-400">Nenhuma compra a crédito parcelada cadastrada.</p>`;
+                return;
+            }
+
+            sortedMonths.forEach(monthStr => {
+                const items = monthMap[monthStr];
+                const totalMonthCredit = items.reduce((sum, item) => sum + item.amount, 0);
+                
+                const [y, m] = monthStr.split('-');
+                const dateObj = new Date(y, m - 1, 1);
+                const monthFormatted = dateObj.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                const capitalizedMonth = monthFormatted.charAt(0).toUpperCase() + monthFormatted.slice(1);
+
+                let itemsHtml = '';
+                items.forEach(item => {
+                    const formattedVal = item.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    itemsHtml += `
+                        <div class="flex justify-between items-center text-sm py-1 border-b border-slate-50 last:border-none">
+                            <div>
+                                <span class="font-medium text-slate-700">${item.description}</span>
+                                <span class="text-xs text-slate-400 ml-2">(${item.category})</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="font-semibold text-slate-800">${formattedVal}</span>
+                                <span class="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-2">${item.installmentText}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                const totalFormatted = totalMonthCredit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                container.innerHTML += `
+                    <div class="border border-slate-100 rounded-lg p-4 bg-slate-50/50 space-y-2">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+                            <h4 class="font-bold text-indigo-600">${capitalizedMonth}</h4>
+                            <span class="font-bold text-slate-800">Total Fatura: ${totalFormatted}</span>
+                        </div>
+                        <div class="space-y-1">
+                            ${itemsHtml}
+                        </div>
+                    </div>
+                `;
+            });
         }
 
         function renderTransactions(transactions) {
@@ -520,7 +615,9 @@
 
             const { error } = await supabaseClient.from('transactions').delete().eq('id', id);
             if (error) alert('Erro ao excluir: ' + error.message);
-            else loadTransactions();
+            else {
+                loadTransactions();
+            }
         }
 
         if ('serviceWorker' in navigator) {
