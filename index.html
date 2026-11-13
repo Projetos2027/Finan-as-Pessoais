@@ -86,10 +86,10 @@
                 </div>
             </div>
 
-            <!-- Adicionar Transação -->
+            <!-- Adicionar / Editar Transação -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                <h3 class="text-lg font-bold mb-4">Nova Transação</h3>
-                <form id="transaction-form" onsubmit="addTransaction(event)" class="space-y-4">
+                <h3 id="form-title" class="text-lg font-bold mb-4">Nova Transação</h3>
+                <form id="transaction-form" onsubmit="saveTransaction(event)" class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                         <input type="text" id="desc" placeholder="Descrição principal" required class="md:col-span-2 px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                         <input type="number" step="0.01" id="amount" placeholder="Valor (R$)" required class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
@@ -140,8 +140,9 @@
                         </div>
                     </div>
 
-                    <div class="flex justify-end pt-2">
-                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2 rounded-lg transition">Adicionar Lançamento</button>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" id="cancel-edit-btn" onclick="cancelEdit()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg transition text-sm">Cancelar</button>
+                        <button type="submit" id="txn-submit-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2 rounded-lg transition">Adicionar Lançamento</button>
                     </div>
                 </form>
             </div>
@@ -338,6 +339,8 @@
 
         let isSignUp = false;
         let currentUser = null;
+        let editingTransactionId = null;
+        let rawTransactionsCache = [];
 
         const expenseCategories = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Outros'];
         const incomeCategories = ['Salário', '13º Salário', 'Férias', 'Apartamento Del Castilho', 'Outros'];
@@ -553,7 +556,6 @@
             return `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
         }
 
-        // Função para calcular a fatura líquida do cartão de crédito de um mês específico
         async function getCreditCardInvoiceForMonth(targetMonth) {
             const { data: creditTxs } = await supabaseClient
                 .from('transactions')
@@ -591,7 +593,6 @@
             return Math.max(0, totalCredit - totalAbat);
         }
 
-        // Calcula receitas, despesas e gastos detalhados por categoria para o mês
         async function calculateMonthData(targetMonth) {
             const { data: txs, error: errTxs } = await supabaseClient.from('transactions').select('*');
             if (errTxs) {
@@ -610,7 +611,6 @@
             expenseCategories.forEach(cat => categoryExpenses[cat] = 0);
             categoryExpenses['Abatimento'] = 0;
 
-            // Calcular Receitas
             txs.forEach(t => {
                 if (t.type === 'income') {
                     if (t.recurrence === 'recorrente' || t.target_month === targetMonth) {
@@ -619,7 +619,6 @@
                 }
             });
 
-            // Calcular Despesas e somar por categoria
             txs.forEach(t => {
                 if (t.type === 'expense') {
                     const cat = t.category || 'Outros';
@@ -644,7 +643,6 @@
                 }
             });
 
-            // Abatimentos pagos neste mês saem do caixa (diminuem disponibilidades)
             if (abatements) {
                 abatements.forEach(a => {
                     if (a.date && a.date.startsWith(targetMonth)) {
@@ -668,10 +666,11 @@
             document.getElementById('total-expense').innerText = data.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
             const { data: rawTxs } = await supabaseClient.from('transactions').select('*').order('date', { ascending: false });
+            rawTransactionsCache = rawTxs || [];
             let processedTransactions = [];
 
-            if (rawTxs) {
-                rawTxs.forEach(t => {
+            if (rawTransactionsCache) {
+                rawTransactionsCache.forEach(t => {
                     if (t.recurrence === 'recorrente') {
                         processedTransactions.push({ ...t, displayAmount: Number(t.amount) });
                     } else {
@@ -705,7 +704,6 @@
             renderTransactions(processedTransactions);
         }
 
-        // Carregar Aba de Situação do Mês e Tetos por Categoria
         async function loadSituation() {
             const selectedMonth = document.getElementById('filter-situation-month').value;
             if (!selectedMonth) return;
@@ -714,18 +712,14 @@
             const creditCardInvoice = await getCreditCardInvoiceForMonth(selectedMonth);
             const maxGlobalCeiling = Math.max(0, data.income - creditCardInvoice);
 
-            // Atualizar badge do limite máximo do teto
             document.getElementById('max-ceiling-badge').innerText = `Máximo permitido: ${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
 
-            // Configurar input max attribute
             const ceilingInput = document.getElementById('situation-ceiling-input');
             ceilingInput.max = maxGlobalCeiling;
 
-            // Carregar Teto Global do localStorage
             const globalCeilingKey = `budget_global_${currentUser.id}_${selectedMonth}`;
             let savedGlobalCeiling = localStorage.getItem(globalCeilingKey);
             
-            // Se o valor salvo exceder o teto máximo permitido, limita ou avisa
             let globalCeilingVal = parseFloat(savedGlobalCeiling) || 0;
             if (globalCeilingVal > maxGlobalCeiling) {
                 globalCeilingVal = maxGlobalCeiling;
@@ -738,7 +732,6 @@
             document.getElementById('situation-expense').innerText = data.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             document.getElementById('situation-balance').innerText = balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-            // Status Card (Positiva ou Negativa)
             const statusCard = document.getElementById('situation-status-card');
             const statusText = document.getElementById('situation-status-text');
 
@@ -750,7 +743,6 @@
                 statusText.innerText = "NEGATIVA";
             }
 
-            // Teto Global / Progresso
             const spentVal = data.expense;
             document.getElementById('ceiling-spent-label').innerText = `Gastos Totais: ${spentVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
 
@@ -776,7 +768,6 @@
                 alertEl.innerText = `Seu teto pode ser de até ${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Receitas R$ ${data.income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - Fatura Cartão R$ ${creditCardInvoice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`;
             }
 
-            // Renderizar Tetos por Categoria
             const catContainer = document.getElementById('category-ceilings-container');
             catContainer.innerHTML = '';
 
@@ -820,20 +811,10 @@
             });
         }
 
-        async function saveGlobalCeiling() {
+        function saveGlobalCeiling() {
             const selectedMonth = document.getElementById('filter-situation-month').value;
             let ceilingVal = parseFloat(document.getElementById('situation-ceiling-input').value) || 0;
             if (!selectedMonth) return;
-
-            const data = await calculateMonthData(selectedMonth);
-            const creditCardInvoice = await getCreditCardInvoiceForMonth(selectedMonth);
-            const maxGlobalCeiling = Math.max(0, data.income - creditCardInvoice);
-
-            if (ceilingVal > maxGlobalCeiling) {
-                alert(`O teto global não pode exceder o valor recebido no mês menos a fatura do cartão (${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). O valor foi ajustado automaticamente.`);
-                ceilingVal = maxGlobalCeiling;
-                document.getElementById('situation-ceiling-input').value = ceilingVal;
-            }
 
             const ceilingKey = `budget_global_${currentUser.id}_${selectedMonth}`;
             localStorage.setItem(ceilingKey, ceilingVal);
@@ -1079,7 +1060,8 @@
                         <td class="p-3 text-slate-600">${t.category || 'Geral'}</td>
                         <td class="p-3">${typeLabel}</td>
                         <td class="p-3 text-right font-semibold ${t.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">${formattedValue}</td>
-                        <td class="p-3 text-center">
+                        <td class="p-3 text-center whitespace-nowrap">
+                            <button type="button" onclick="editTransaction('${t.id}')" class="text-indigo-600 hover:text-indigo-800 transition text-xs font-bold mr-2">Editar</button>
                             <button type="button" onclick="deleteTransaction('${t.id}')" class="text-slate-400 hover:text-rose-600 transition text-xs font-bold">Excluir</button>
                         </td>
                     </tr>
@@ -1087,7 +1069,54 @@
             });
         }
 
-        async function addTransaction(e) {
+        function editTransaction(id) {
+            const t = rawTransactionsCache.find(item => item.id === id);
+            if (!t) return;
+
+            editingTransactionId = id;
+            document.getElementById('form-title').innerText = 'Editar Lançamento';
+            document.getElementById('txn-submit-btn').innerText = 'Salvar Alteração';
+            document.getElementById('cancel-edit-btn').classList.remove('hidden');
+
+            document.getElementById('desc').value = t.description;
+            document.getElementById('amount').value = t.amount;
+            document.getElementById('type').value = t.type;
+            updateFormFields();
+
+            document.getElementById('category').value = t.category || '';
+            document.getElementById('recurrence').value = t.recurrence || 'eventual';
+            toggleFormLogic();
+
+            if (t.type === 'expense') {
+                if (t.date) document.getElementById('txn-date').value = t.date;
+                if (t.payment_method) document.getElementById('payment-method').value = t.payment_method;
+                toggleFormLogic();
+                if (t.payment_method === 'crédito' && t.installments) {
+                    document.getElementById('installments').value = t.installments;
+                }
+            } else {
+                if (t.target_month) document.getElementById('target-month').value = t.target_month;
+            }
+
+            document.getElementById('transaction-form').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            editingTransactionId = null;
+            document.getElementById('form-title').innerText = 'Nova Transação';
+            document.getElementById('txn-submit-btn').innerText = 'Adicionar Lançamento';
+            document.getElementById('cancel-edit-btn').classList.add('hidden');
+            document.getElementById('transaction-form').reset();
+
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('txn-date').value = now.toISOString().split('T')[0];
+            document.getElementById('target-month').value = `${year}-${month}`;
+            updateFormFields();
+        }
+
+        async function saveTransaction(e) {
             e.preventDefault();
             const description = document.getElementById('desc').value;
             const amount = parseFloat(document.getElementById('amount').value);
@@ -1113,8 +1142,9 @@
                 }
             }
 
-            const { error } = await supabaseClient.from('transactions').insert([
-                { 
+            if (editingTransactionId) {
+                // Atualizar
+                const { error } = await supabaseClient.from('transactions').update({
                     description, 
                     amount, 
                     type, 
@@ -1123,19 +1153,41 @@
                     target_month: targetMonth, 
                     payment_method: paymentMethod,
                     installments: installments,
-                    date, 
-                    user_id: currentUser.id 
-                }
-            ]);
+                    date
+                }).eq('id', editingTransactionId);
 
-            if (error) {
-                alert('Erro ao salvar: ' + error.message);
+                if (error) {
+                    alert('Erro ao atualizar: ' + error.message);
+                } else {
+                    cancelEdit();
+                    loadTransactions();
+                }
             } else {
-                document.getElementById('transaction-form').reset();
-                document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
-                document.getElementById('filter-month').value = targetMonth || document.getElementById('filter-month').value;
-                updateFormFields();
-                loadTransactions();
+                // Inserir novo
+                const { error } = await supabaseClient.from('transactions').insert([
+                    { 
+                        description, 
+                        amount, 
+                        type, 
+                        category, 
+                        recurrence, 
+                        target_month: targetMonth, 
+                        payment_method: paymentMethod,
+                        installments: installments,
+                        date, 
+                        user_id: currentUser.id 
+                    }
+                ]);
+
+                if (error) {
+                    alert('Erro ao salvar: ' + error.message);
+                } else {
+                    document.getElementById('transaction-form').reset();
+                    document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
+                    document.getElementById('filter-month').value = targetMonth || document.getElementById('filter-month').value;
+                    updateFormFields();
+                    loadTransactions();
+                }
             }
         }
 
