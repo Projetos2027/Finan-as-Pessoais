@@ -91,12 +91,16 @@
                         </select>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                         <div>
                             <label class="block text-xs font-medium text-slate-500 mb-1">Categoria</label>
                             <select id="category" onchange="checkOtherCategory()" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                                 <!-- Preenchido via JS -->
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Data da Despesa/Transação</label>
+                            <input type="date" id="txn-date" required class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div id="recurrence-container" class="hidden">
                             <label class="block text-xs font-medium text-slate-500 mb-1">Tipo de Receita</label>
@@ -133,7 +137,7 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                                <th class="p-3">Data / Mês</th>
+                                <th class="p-3">Data</th>
                                 <th class="p-3">Descrição</th>
                                 <th class="p-3">Categoria</th>
                                 <th class="p-3">Tipo</th>
@@ -169,8 +173,11 @@
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
+            const todayStr = now.toISOString().split('T')[0];
+
             document.getElementById('filter-month').value = `${year}-${month}`;
             document.getElementById('target-month').value = `${year}-${month}`;
+            document.getElementById('txn-date').value = todayStr; // Preenche data atual por padrão
 
             updateFormFields();
 
@@ -216,7 +223,6 @@
             checkOtherCategory();
         }
 
-        // Mostrar ou ocultar o campo de detalhe obrigatório se for "Outros"
         function checkOtherCategory() {
             const category = document.getElementById('category').value;
             const otherContainer = document.getElementById('other-details-container');
@@ -331,7 +337,15 @@
                 const formattedValue = Number(t.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const typeLabel = t.type === 'income' ? '<span class="text-emerald-600 font-medium">Receita</span>' : '<span class="text-rose-600 font-medium">Despesa</span>';
                 
+                // Formatar data de YYYY-MM-DD para DD/MM/YYYY
                 let dateDisplay = t.date;
+                if (t.date && t.date.includes('-')) {
+                    const parts = t.date.split('-');
+                    if (parts.length === 3) {
+                        dateDisplay = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    }
+                }
+
                 if (t.type === 'income' && t.recurrence === 'eventual') {
                     dateDisplay = `Mês: ${t.target_month}`;
                 } else if (t.type === 'income' && t.recurrence === 'recorrente') {
@@ -376,8 +390,8 @@
             const amount = parseFloat(document.getElementById('amount').value);
             const type = document.getElementById('type').value;
             const category = document.getElementById('category').value;
+            const date = document.getElementById('txn-date').value; // Pega a data escolhida pelo usuário
             
-            // Se for "Outros", anexa o detalhe preenchido à descrição
             if (category === 'Outros') {
                 const otherDetails = document.getElementById('other-details').value;
                 if (otherDetails) {
@@ -387,7 +401,6 @@
 
             const recurrence = type === 'income' ? document.getElementById('recurrence').value : 'eventual';
             const targetMonth = (type === 'income' && recurrence === 'eventual') ? document.getElementById('target-month').value : null;
-            const date = new Date().toISOString().split('T')[0];
 
             const { error } = await supabaseClient.from('transactions').insert([
                 { description, amount, type, category, recurrence, target_month: targetMonth, date, user_id: currentUser.id }
@@ -397,6 +410,8 @@
                 alert('Erro ao salvar: ' + error.message);
             } else {
                 document.getElementById('transaction-form').reset();
+                // Restaura a data de hoje e o mês do filtro após resetar o form
+                document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
                 document.getElementById('filter-month').value = targetMonth || document.getElementById('filter-month').value;
                 updateFormFields();
                 loadTransactions();
