@@ -51,10 +51,21 @@
         <!-- Dashboard Financeiro (Aparece após login) -->
         <div id="dashboard-section" class="hidden space-y-6">
             
+            <!-- Barra de Filtro de Mês e Resumo -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Visão Mensal</h2>
+                    <p class="text-xs text-slate-500">Selecione o mês para visualizar o balanço</p>
+                </div>
+                <div>
+                    <input type="month" id="filter-month" onchange="loadTransactions()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50">
+                </div>
+            </div>
+
             <!-- Cards de Resumo -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-                    <p class="text-sm text-slate-500">Saldo Atual</p>
+                    <p class="text-sm text-slate-500">Saldo do Mês</p>
                     <p id="total-balance" class="text-2xl font-bold text-slate-800">R$ 0,00</p>
                 </div>
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
@@ -70,28 +81,61 @@
             <!-- Adicionar Transação -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
                 <h3 class="text-lg font-bold mb-4">Nova Transação</h3>
-                <form id="transaction-form" onsubmit="addTransaction(event)" class="grid grid-cols-1 md:grid-cols-5 gap-3">
-                    <input type="text" id="desc" placeholder="Descrição (ex: Supermercado)" required class="md:col-span-2 px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                    <input type="number" step="0.01" id="amount" placeholder="Valor (R$)" required class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                    <select id="type" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="expense">Despesa</option>
-                        <option value="income">Receita</option>
-                    </select>
-                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition">Adicionar</button>
+                <form id="transaction-form" onsubmit="addTransaction(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <input type="text" id="desc" placeholder="Descrição principal" required class="md:col-span-2 px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                        <input type="number" step="0.01" id="amount" placeholder="Valor (R$)" required class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                        <select id="type" onchange="updateFormFields()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="expense">Despesa</option>
+                            <option value="income">Receita</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Categoria</label>
+                            <select id="category" onchange="checkOtherCategory()" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                                <!-- Preenchido via JS -->
+                            </select>
+                        </div>
+                        <div id="recurrence-container" class="hidden">
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Tipo de Receita</label>
+                            <select id="recurrence" onchange="toggleTargetMonth()" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="recorrente">Recorrente (Todos os meses)</option>
+                                <option value="eventual">Eventual (Mês específico)</option>
+                            </select>
+                        </div>
+                        <div id="target-month-container" class="hidden">
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Mês de Recebimento</label>
+                            <input type="month" id="target-month" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+
+                    <!-- Campo obrigatório extra caso escolha "Outros" -->
+                    <div id="other-details-container" class="hidden">
+                        <label class="block text-xs font-medium text-amber-600 mb-1 font-semibold">Descreva o motivo / detalhe (Obrigatório para Outros)</label>
+                        <input type="text" id="other-details" placeholder="Ex: Venda de item usado, reembolso, etc." class="w-full px-3 py-2 border border-amber-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 bg-amber-50/30">
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2 rounded-lg transition">Adicionar Lançamento</button>
+                    </div>
                 </form>
             </div>
 
             <!-- Histórico de Transações -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                <div class="p-4 border-b border-slate-100">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center">
                     <h3 class="text-lg font-bold">Histórico de Lançamentos</h3>
+                    <span id="filter-status" class="text-xs text-slate-500">Exibindo mês selecionado</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                                <th class="p-3">Data</th>
+                                <th class="p-3">Data / Mês</th>
                                 <th class="p-3">Descrição</th>
+                                <th class="p-3">Categoria</th>
                                 <th class="p-3">Tipo</th>
                                 <th class="p-3 text-right">Valor</th>
                                 <th class="p-3 text-center">Ações</th>
@@ -118,8 +162,18 @@
         let isSignUp = false;
         let currentUser = null;
 
-        // Inicialização
+        const expenseCategories = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Outros'];
+        const incomeCategories = ['Salário', '13º Salário', 'Férias', 'Apartamento Del Castilho', 'Outros'];
+
         document.addEventListener('DOMContentLoaded', async () => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('filter-month').value = `${year}-${month}`;
+            document.getElementById('target-month').value = `${year}-${month}`;
+
+            updateFormFields();
+
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
                 currentUser = session.user;
@@ -137,7 +191,59 @@
             });
         });
 
-        // Alternar entre Login e Cadastro
+        function updateFormFields() {
+            const type = document.getElementById('type').value;
+            const categorySelect = document.getElementById('category');
+            const recurrenceContainer = document.getElementById('recurrence-container');
+            
+            categorySelect.innerHTML = '';
+            const categories = type === 'income' ? incomeCategories : expenseCategories;
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                categorySelect.appendChild(option);
+            });
+
+            if (type === 'income') {
+                recurrenceContainer.classList.remove('hidden');
+                toggleTargetMonth();
+            } else {
+                recurrenceContainer.classList.add('hidden');
+                document.getElementById('target-month-container').classList.add('hidden');
+            }
+
+            checkOtherCategory();
+        }
+
+        // Mostrar ou ocultar o campo de detalhe obrigatório se for "Outros"
+        function checkOtherCategory() {
+            const category = document.getElementById('category').value;
+            const otherContainer = document.getElementById('other-details-container');
+            const otherInput = document.getElementById('other-details');
+
+            if (category === 'Outros') {
+                otherContainer.classList.remove('hidden');
+                otherInput.required = true;
+            } else {
+                otherContainer.classList.add('hidden');
+                otherInput.required = false;
+                otherInput.value = '';
+            }
+        }
+
+        function toggleTargetMonth() {
+            const type = document.getElementById('type').value;
+            const recurrence = document.getElementById('recurrence').value;
+            const targetMonthContainer = document.getElementById('target-month-container');
+
+            if (type === 'income' && recurrence === 'eventual') {
+                targetMonthContainer.classList.remove('hidden');
+            } else {
+                targetMonthContainer.classList.add('hidden');
+            }
+        }
+
         function toggleAuthMode() {
             isSignUp = !isSignUp;
             document.getElementById('auth-title').innerText = isSignUp ? 'Criar Conta' : 'Acessar Sistema';
@@ -146,7 +252,6 @@
             document.getElementById('toggle-btn').innerText = isSignUp ? 'Fazer login' : 'Criar conta';
         }
 
-        // Lidar com Autenticação
         async function handleAuth(e) {
             e.preventDefault();
             const email = document.getElementById('email').value;
@@ -184,8 +289,9 @@
             document.getElementById('user-info').classList.add('hidden');
         }
 
-        // Carregar Transações do Supabase
         async function loadTransactions() {
+            const selectedMonth = document.getElementById('filter-month').value;
+
             const { data, error } = await supabaseClient
                 .from('transactions')
                 .select('*')
@@ -196,17 +302,28 @@
                 return;
             }
 
-            renderTransactions(data);
-            calculateSummary(data);
+            const filteredTransactions = data.filter(t => {
+                if (t.type === 'expense') {
+                    return t.date && t.date.startsWith(selectedMonth);
+                } else {
+                    if (t.recurrence === 'recorrente') {
+                        return true;
+                    } else {
+                        return t.target_month === selectedMonth;
+                    }
+                }
+            });
+
+            renderTransactions(filteredTransactions);
+            calculateSummary(filteredTransactions);
         }
 
-        // Renderizar Tabela
         function renderTransactions(transactions) {
             const tbody = document.getElementById('transactions-list');
             tbody.innerHTML = '';
 
             if (transactions.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Nenhum lançamento encontrado.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum lançamento para este mês.</td></tr>`;
                 return;
             }
 
@@ -214,10 +331,18 @@
                 const formattedValue = Number(t.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const typeLabel = t.type === 'income' ? '<span class="text-emerald-600 font-medium">Receita</span>' : '<span class="text-rose-600 font-medium">Despesa</span>';
                 
+                let dateDisplay = t.date;
+                if (t.type === 'income' && t.recurrence === 'eventual') {
+                    dateDisplay = `Mês: ${t.target_month}`;
+                } else if (t.type === 'income' && t.recurrence === 'recorrente') {
+                    dateDisplay = 'Recorrente';
+                }
+
                 tbody.innerHTML += `
                     <tr class="hover:bg-slate-50 transition">
-                        <td class="p-3 text-slate-500">${t.date}</td>
+                        <td class="p-3 text-slate-500">${dateDisplay}</td>
                         <td class="p-3 font-medium">${t.description}</td>
+                        <td class="p-3 text-slate-600">${t.category || 'Geral'}</td>
                         <td class="p-3">${typeLabel}</td>
                         <td class="p-3 text-right font-semibold ${t.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">${formattedValue}</td>
                         <td class="p-3 text-center">
@@ -228,7 +353,6 @@
             });
         }
 
-        // Calcular Resumos
         function calculateSummary(transactions) {
             let income = 0;
             let expense = 0;
@@ -241,31 +365,44 @@
 
             const balance = income - expense;
 
-            document.getElementById('total-balance').innerText = balance.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-            document.getElementById('total-income').innerText = income.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-            document.getElementById('total-expense').innerText = expense.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+            document.getElementById('total-balance').innerText = balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('total-income').innerText = income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('total-expense').innerText = expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
 
-        // Adicionar Transação
         async function addTransaction(e) {
             e.preventDefault();
-            const description = document.getElementById('desc').value;
+            let description = document.getElementById('desc').value;
             const amount = parseFloat(document.getElementById('amount').value);
             const type = document.getElementById('type').value;
+            const category = document.getElementById('category').value;
+            
+            // Se for "Outros", anexa o detalhe preenchido à descrição
+            if (category === 'Outros') {
+                const otherDetails = document.getElementById('other-details').value;
+                if (otherDetails) {
+                    description = `${description} (${otherDetails})`;
+                }
+            }
+
+            const recurrence = type === 'income' ? document.getElementById('recurrence').value : 'eventual';
+            const targetMonth = (type === 'income' && recurrence === 'eventual') ? document.getElementById('target-month').value : null;
+            const date = new Date().toISOString().split('T')[0];
 
             const { error } = await supabaseClient.from('transactions').insert([
-                { description, amount, type, category: 'Geral', user_id: currentUser.id }
+                { description, amount, type, category, recurrence, target_month: targetMonth, date, user_id: currentUser.id }
             ]);
 
             if (error) {
                 alert('Erro ao salvar: ' + error.message);
             } else {
                 document.getElementById('transaction-form').reset();
+                document.getElementById('filter-month').value = targetMonth || document.getElementById('filter-month').value;
+                updateFormFields();
                 loadTransactions();
             }
         }
 
-        // Excluir Transação
         async function deleteTransaction(id) {
             if (!confirm('Deseja realmente excluir este lançamento?')) return;
 
@@ -274,7 +411,6 @@
             else loadTransactions();
         }
 
-        // Registrar Service Worker para PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
