@@ -428,7 +428,7 @@
                 paymentMethodContainer.classList.add('hidden');
             } else {
                 dateContainer.classList.remove('hidden');
-                document.getElementById('txn-date').required = false; // Opcional se for eventual com target_month
+                document.getElementById('txn-date').required = false;
                 paymentMethodContainer.classList.remove('hidden');
             }
 
@@ -605,7 +605,6 @@
             expenseCategories.forEach(cat => categoryExpenses[cat] = 0);
             categoryExpenses['Abatimento'] = 0;
 
-            // Calcular Receitas
             txs.forEach(t => {
                 if (t.type === 'income') {
                     if (t.recurrence === 'recorrente' || t.target_month === targetMonth) {
@@ -614,7 +613,6 @@
                 }
             });
 
-            // Calcular Despesas
             txs.forEach(t => {
                 if (t.type === 'expense') {
                     const cat = t.category || 'Outros';
@@ -834,6 +832,10 @@
             const selectedMonth = document.getElementById('filter-credit-month').value;
             if (!selectedMonth) return;
 
+            // Garantir que temos o cache de transações atualizado para edição
+            const { data: rawTxs } = await supabaseClient.from('transactions').select('*');
+            rawTransactionsCache = rawTxs || [];
+
             const { data: creditTxs, error: errTxs } = await supabaseClient
                 .from('transactions')
                 .select('*')
@@ -955,9 +957,12 @@
                     ? `<span class="text-emerald-600 font-semibold">- ${formattedVal}</span>` 
                     : `<span class="font-semibold text-slate-800">${formattedVal}</span>`;
 
-                const deleteBtn = item.isAbatement 
-                    ? `<button type="button" onclick="deleteAbatement('${item.id}')" class="text-slate-400 hover:text-rose-600 transition text-xs font-bold">Excluir</button>`
-                    : `-`;
+                let actionBtn = '-';
+                if (item.isAbatement) {
+                    actionBtn = `<button type="button" onclick="deleteAbatement('${item.id}')" class="text-slate-400 hover:text-rose-600 transition text-xs font-bold">Excluir</button>`;
+                } else {
+                    actionBtn = `<button type="button" onclick="editTransaction('${item.id}')" class="text-indigo-600 hover:text-indigo-800 transition text-xs font-bold">Editar</button>`;
+                }
 
                 tbody.innerHTML += `
                     <tr class="hover:bg-slate-50 transition">
@@ -966,7 +971,7 @@
                         <td class="p-3 text-slate-600">${item.category}</td>
                         <td class="p-3 text-center"><span class="${item.isAbatement ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'} px-2 py-0.5 rounded text-xs">${item.installmentText}</span></td>
                         <td class="p-3 text-right">${valDisplay}</td>
-                        <td class="p-3 text-center">${deleteBtn}</td>
+                        <td class="p-3 text-center">${actionBtn}</td>
                     </tr>
                 `;
             });
@@ -1065,9 +1070,15 @@
             });
         }
 
-        function editTransaction(id) {
-            const t = rawTransactionsCache.find(item => item.id === id);
+        async function editTransaction(id) {
+            let t = rawTransactionsCache.find(item => item.id === id);
+            if (!t) {
+                const { data } = await supabaseClient.from('transactions').select('*').eq('id', id).single();
+                t = data;
+            }
             if (!t) return;
+
+            switchTab('dashboard');
 
             editingTransactionId = id;
             document.getElementById('form-title').innerText = 'Editar Lançamento';
