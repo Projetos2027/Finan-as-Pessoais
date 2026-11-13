@@ -25,9 +25,10 @@
         </div>
         <!-- Abas de Navegação Superior -->
         <div id="nav-tabs" class="hidden bg-indigo-700/50 px-4 border-t border-indigo-500/30">
-            <div class="max-w-4xl mx-auto flex gap-6 text-sm font-medium">
-                <button type="button" onclick="switchTab('dashboard')" id="tab-dashboard" class="py-2.5 border-b-2 border-white text-white">Painel Principal</button>
-                <button type="button" onclick="switchTab('credit')" id="tab-credit" class="py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition">Fatura Cartão</button>
+            <div class="max-w-4xl mx-auto flex gap-6 text-sm font-medium overflow-x-auto">
+                <button type="button" onclick="switchTab('dashboard')" id="tab-dashboard" class="py-2.5 border-b-2 border-white text-white whitespace-nowrap">Painel Principal</button>
+                <button type="button" onclick="switchTab('credit')" id="tab-credit" class="py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition whitespace-nowrap">Fatura Cartão</button>
+                <button type="button" onclick="switchTab('situation')" id="tab-situation" class="py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition whitespace-nowrap">Situação do Mês</button>
             </div>
         </div>
     </header>
@@ -72,7 +73,7 @@
             <!-- Cards de Resumo -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-                    <p class="text-sm text-slate-500">Saldo do Mês</p>
+                    <p class="text-sm text-slate-500">Saldo do Mês (Disponibilidade)</p>
                     <p id="total-balance" class="text-2xl font-bold text-slate-800">R$ 0,00</p>
                 </div>
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
@@ -176,7 +177,7 @@
             <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 class="text-lg font-bold text-slate-800">Fatura do Cartão de Crédito</h2>
-                    <p class="text-xs text-slate-500">Selecione o mês para ver a fatura (os abatimentos feitos hoje descontam automaticamente no mês seguinte)</p>
+                    <p class="text-xs text-slate-500">Abatimentos feitos hoje diminuem a fatura do mês seguinte e reduzem o caixa do mês atual</p>
                 </div>
                 <div>
                     <input type="month" id="filter-credit-month" onchange="loadCreditCardBill()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50">
@@ -207,7 +208,7 @@
                         <input type="number" step="0.01" id="abatement-amount" placeholder="Ex: 150.00" required class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div class="md:col-span-4 flex justify-end">
-                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-2 rounded-lg transition text-sm">Salvar Abatimento (Vai para a fatura do mês seguinte)</button>
+                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-2 rounded-lg transition text-sm">Salvar Abatimento (Sai do caixa hoje e abate fatura mês que vem)</button>
                     </div>
                 </form>
             </div>
@@ -248,6 +249,79 @@
 
         </div>
 
+        <!-- Seção: Situação do Mês -->
+        <div id="situation-section" class="hidden space-y-6">
+            
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Situação Financeira do Mês</h2>
+                    <p class="text-xs text-slate-500">Analise seu saldo, status, teto global e tetos por categoria</p>
+                </div>
+                <div>
+                    <input type="month" id="filter-situation-month" onchange="loadSituation()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50">
+                </div>
+            </div>
+
+            <!-- Status Card Principal (Positiva / Negativa) -->
+            <div id="situation-status-card" class="p-6 rounded-xl shadow-sm border text-white transition bg-emerald-600">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-sm opacity-90">Status da Situação Mensal</p>
+                        <h3 id="situation-status-text" class="text-3xl font-extrabold mt-1">POSITIVA</h3>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm opacity-90">Disponibilidade (Saldo)</p>
+                        <p id="situation-balance" class="text-2xl font-bold mt-1">R$ 0,00</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configurar Teto Global de Gastos -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
+                <h3 class="text-lg font-bold text-indigo-600">🎯 Teto Global de Gastos do Mês</h3>
+                <div class="flex flex-col md:flex-row gap-3 items-end">
+                    <div class="flex-grow">
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Definir Teto Global (R$)</label>
+                        <input type="number" step="0.01" id="situation-ceiling-input" oninput="saveGlobalCeiling()" placeholder="Ex: 5000.00" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <!-- Barra de Progresso do Teto Global -->
+                <div class="space-y-2 pt-2">
+                    <div class="flex justify-between text-sm">
+                        <span id="ceiling-spent-label" class="font-medium text-slate-700">Gastos Totais: R$ 0,00</span>
+                        <span id="ceiling-percent-label" class="font-semibold text-slate-800">0% do teto</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                        <div id="ceiling-progress-bar" class="bg-indigo-600 h-3 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                    <p id="ceiling-alert" class="text-xs text-slate-500"></p>
+                </div>
+            </div>
+
+            <!-- Configurar Tetos por Categoria -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
+                <h3 class="text-lg font-bold text-indigo-600">🏷️ Tetos de Gastos por Categoria</h3>
+                <p class="text-xs text-slate-500">Defina limites individuais para cada categoria neste mês e acompanhe o consumo:</p>
+                <div id="category-ceilings-container" class="space-y-4">
+                    <!-- Gerado via JS -->
+                </div>
+            </div>
+
+            <!-- Detalhes de Receitas e Despesas do Mês -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 space-y-2">
+                    <p class="text-sm text-slate-500">Total de Receitas</p>
+                    <p id="situation-income" class="text-xl font-bold text-emerald-600">R$ 0,00</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 space-y-2">
+                    <p class="text-sm text-slate-500">Total de Despesas (incluindo abatimentos pagos)</p>
+                    <p id="situation-expense" class="text-xl font-bold text-rose-600">R$ 0,00</p>
+                </div>
+            </div>
+
+        </div>
+
     </main>
 
     <!-- Script de Conexão e Lógica -->
@@ -271,6 +345,7 @@
 
             document.getElementById('filter-month').value = `${year}-${month}`;
             document.getElementById('filter-credit-month').value = `${year}-${month}`;
+            document.getElementById('filter-situation-month').value = `${year}-${month}`;
             document.getElementById('target-month').value = `${year}-${month}`;
             document.getElementById('txn-date').value = todayStr;
             document.getElementById('abatement-date').value = todayStr;
@@ -297,21 +372,29 @@
         function switchTab(tab) {
             const tabDashboard = document.getElementById('tab-dashboard');
             const tabCredit = document.getElementById('tab-credit');
+            const tabSituation = document.getElementById('tab-situation');
+            
             const dashboardSection = document.getElementById('dashboard-section');
             const creditSection = document.getElementById('credit-card-section');
+            const situationSection = document.getElementById('situation-section');
+
+            [tabDashboard, tabCredit, tabSituation].forEach(t => {
+                t.className = "py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition whitespace-nowrap";
+            });
+            [dashboardSection, creditSection, situationSection].forEach(s => s.classList.add('hidden'));
 
             if (tab === 'dashboard') {
-                tabDashboard.className = "py-2.5 border-b-2 border-white text-white";
-                tabCredit.className = "py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition";
+                tabDashboard.className = "py-2.5 border-b-2 border-white text-white whitespace-nowrap";
                 dashboardSection.classList.remove('hidden');
-                creditSection.classList.add('hidden');
                 loadTransactions();
-            } else {
-                tabCredit.className = "py-2.5 border-b-2 border-white text-white";
-                tabDashboard.className = "py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition";
+            } else if (tab === 'credit') {
+                tabCredit.className = "py-2.5 border-b-2 border-white text-white whitespace-nowrap";
                 creditSection.classList.remove('hidden');
-                dashboardSection.classList.add('hidden');
                 loadCreditCardBill();
+            } else if (tab === 'situation') {
+                tabSituation.className = "py-2.5 border-b-2 border-white text-white whitespace-nowrap";
+                situationSection.classList.remove('hidden');
+                loadSituation();
             }
         }
 
@@ -426,6 +509,7 @@
             document.getElementById('auth-section').classList.add('hidden');
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('credit-card-section').classList.add('hidden');
+            document.getElementById('situation-section').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
             document.getElementById('nav-tabs').classList.add('hidden');
         }
@@ -452,7 +536,6 @@
             return list;
         }
 
-        // Retorna o mês seguinte à data informada (regra de fatura/abatimento)
         function getTargetMonthFromDate(dateStr) {
             if (!dateStr) return '';
             const [y, m] = dateStr.split('-').map(Number);
@@ -465,61 +548,244 @@
             return `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
         }
 
-        async function loadTransactions() {
-            const selectedMonth = document.getElementById('filter-month').value;
-
-            const { data, error } = await supabaseClient
-                .from('transactions')
-                .select('*')
-                .order('date', { ascending: false });
-
-            if (error) {
-                console.error('Erro ao carregar transações:', error);
-                return;
+        // Calcula receitas, despesas e gastos detalhados por categoria para o mês
+        async function calculateMonthData(targetMonth) {
+            const { data: txs, error: errTxs } = await supabaseClient.from('transactions').select('*');
+            if (errTxs) {
+                console.error('Erro ao buscar transações:', errTxs);
+                return { income: 0, expense: 0, categoryExpenses: {} };
             }
 
-            let processedTransactions = [];
+            const { data: abatements, error: errAbat } = await supabaseClient.from('credit_abatements').select('*');
+            if (errAbat) {
+                console.error('Erro ao buscar abatimentos:', errAbat);
+            }
 
-            data.forEach(t => {
-                if (t.recurrence === 'recorrente') {
-                    processedTransactions.push({ ...t, displayAmount: Number(t.amount) });
-                } else {
-                    if (t.type === 'income') {
-                        if (t.target_month === selectedMonth) {
-                            processedTransactions.push({ ...t, displayAmount: Number(t.amount) });
-                        }
-                    } else {
-                        if (t.payment_method === 'crédito') {
-                            const numInst = t.installments && t.installments > 0 ? t.installments : 1;
-                            const instMonths = getInstallmentMonths(t.date, numInst);
-                            const matchedInst = instMonths.find(im => im.month === selectedMonth);
-                            
-                            if (matchedInst) {
-                                const instAmount = Number(t.amount) / numInst;
-                                processedTransactions.push({
-                                    ...t,
-                                    displayAmount: instAmount,
-                                    displayDescription: `${t.description} (Parcela ${matchedInst.installmentNumber}/${numInst})`
-                                });
-                            }
-                        } else {
-                            if (t.date && t.date.startsWith(selectedMonth)) {
-                                processedTransactions.push({ ...t, displayAmount: Number(t.amount) });
-                            }
+            let totalIncome = 0;
+            let totalExpense = 0;
+            let categoryExpenses = {};
+            expenseCategories.forEach(cat => categoryExpenses[cat] = 0);
+            categoryExpenses['Abatimento'] = 0;
+
+            // Calcular Receitas
+            txs.forEach(t => {
+                if (t.type === 'income') {
+                    if (t.recurrence === 'recorrente' || t.target_month === targetMonth) {
+                        totalIncome += Number(t.amount);
+                    }
+                }
+            });
+
+            // Calcular Despesas e somar por categoria
+            txs.forEach(t => {
+                if (t.type === 'expense') {
+                    const cat = t.category || 'Outros';
+                    if (!categoryExpenses[cat]) categoryExpenses[cat] = 0;
+
+                    if (t.recurrence === 'recorrente') {
+                        totalExpense += Number(t.amount);
+                        categoryExpenses[cat] += Number(t.amount);
+                    } else if (t.payment_method === 'à vista' && t.date && t.date.startsWith(targetMonth)) {
+                        totalExpense += Number(t.amount);
+                        categoryExpenses[cat] += Number(t.amount);
+                    } else if (t.payment_method === 'crédito') {
+                        const numInst = t.installments && t.installments > 0 ? t.installments : 1;
+                        const instAmount = Number(t.amount) / numInst;
+                        const instMonths = getInstallmentMonths(t.date, numInst);
+                        const matched = instMonths.find(im => im.month === targetMonth);
+                        if (matched) {
+                            totalExpense += instAmount;
+                            categoryExpenses[cat] += instAmount;
                         }
                     }
                 }
             });
 
+            // Abatimentos pagos neste mês saem do caixa (diminuem disponibilidades)
+            if (abatements) {
+                abatements.forEach(a => {
+                    if (a.date && a.date.startsWith(targetMonth)) {
+                        totalExpense += Number(a.amount);
+                        categoryExpenses['Abatimento'] += Number(a.amount);
+                    }
+                });
+            }
+
+            return { income: totalIncome, expense: totalExpense, categoryExpenses };
+        }
+
+        async function loadTransactions() {
+            const selectedMonth = document.getElementById('filter-month').value;
+            const data = await calculateMonthData(selectedMonth);
+
+            const balance = data.income - data.expense;
+
+            document.getElementById('total-balance').innerText = balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('total-income').innerText = data.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('total-expense').innerText = data.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            const { data: rawTxs } = await supabaseClient.from('transactions').select('*').order('date', { ascending: false });
+            let processedTransactions = [];
+
+            if (rawTxs) {
+                rawTxs.forEach(t => {
+                    if (t.recurrence === 'recorrente') {
+                        processedTransactions.push({ ...t, displayAmount: Number(t.amount) });
+                    } else {
+                        if (t.type === 'income') {
+                            if (t.target_month === selectedMonth) {
+                                processedTransactions.push({ ...t, displayAmount: Number(t.amount) });
+                            }
+                        } else {
+                            if (t.payment_method === 'crédito') {
+                                const numInst = t.installments && t.installments > 0 ? t.installments : 1;
+                                const instMonths = getInstallmentMonths(t.date, numInst);
+                                const matchedInst = instMonths.find(im => im.month === selectedMonth);
+                                
+                                if (matchedInst) {
+                                    const instAmount = Number(t.amount) / numInst;
+                                    processedTransactions.push({
+                                        ...t,
+                                        displayAmount: instAmount,
+                                        displayDescription: `${t.description} (Parcela ${matchedInst.installmentNumber}/${numInst})`
+                                    });
+                                }
+                            } else {
+                                if (t.date && t.date.startsWith(selectedMonth)) {
+                                    processedTransactions.push({ ...t, displayAmount: Number(t.amount) });
+                                }
+                            }
+                        }
+                    }
+                });
+            }
             renderTransactions(processedTransactions);
-            calculateSummary(processedTransactions);
+        }
+
+        // Carregar Aba de Situação do Mês e Tetos por Categoria
+        async function loadSituation() {
+            const selectedMonth = document.getElementById('filter-situation-month').value;
+            if (!selectedMonth) return;
+
+            // Carregar Teto Global do localStorage
+            const globalCeilingKey = `budget_global_${currentUser.id}_${selectedMonth}`;
+            const savedGlobalCeiling = localStorage.getItem(globalCeilingKey) || '';
+            document.getElementById('situation-ceiling-input').value = savedGlobalCeiling;
+
+            const data = await calculateMonthData(selectedMonth);
+            const balance = data.income - data.expense;
+
+            document.getElementById('situation-income').innerText = data.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('situation-expense').innerText = data.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('situation-balance').innerText = balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            // Status Card (Positiva ou Negativa)
+            const statusCard = document.getElementById('situation-status-card');
+            const statusText = document.getElementById('situation-status-text');
+
+            if (balance >= 0) {
+                statusCard.className = "p-6 rounded-xl shadow-sm border text-white transition bg-emerald-600";
+                statusText.innerText = "POSITIVA";
+            } else {
+                statusCard.className = "p-6 rounded-xl shadow-sm border text-white transition bg-rose-600";
+                statusText.innerText = "NEGATIVA";
+            }
+
+            // Teto Global / Progresso
+            const globalCeilingVal = parseFloat(savedGlobalCeiling) || 0;
+            const spentVal = data.expense;
+
+            document.getElementById('ceiling-spent-label').innerText = `Gastos Totais: ${spentVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+
+            const percentLabel = document.getElementById('ceiling-percent-label');
+            const progressBar = document.getElementById('ceiling-progress-bar');
+            const alertEl = document.getElementById('ceiling-alert');
+
+            if (globalCeilingVal > 0) {
+                const percent = ((spentVal / globalCeilingVal) * 100).toFixed(1);
+                percentLabel.innerText = `${percent}% do teto`;
+                progressBar.style.width = `${Math.min(percent, 100)}%`;
+
+                if (spentVal > globalCeilingVal) {
+                    progressBar.className = "bg-rose-500 h-3 rounded-full transition-all";
+                    alertEl.innerHTML = `<span class="text-rose-600 font-semibold">⚠️ Atenção: Você ultrapassou o teto global em ${(spentVal - globalCeilingVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}!</span>`;
+                } else {
+                    progressBar.className = "bg-indigo-600 h-3 rounded-full transition-all";
+                    alertEl.innerText = `Você ainda tem ${(globalCeilingVal - spentVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} disponíveis dentro do teto global.`;
+                }
+            } else {
+                percentLabel.innerText = "Nenhum teto global definido";
+                progressBar.style.width = "0%";
+                alertEl.innerText = "Digite um valor acima para acompanhar o limite global.";
+            }
+
+            // Renderizar Tetos por Categoria
+            const catContainer = document.getElementById('category-ceilings-container');
+            catContainer.innerHTML = '';
+
+            expenseCategories.forEach(cat => {
+                const catCeilingKey = `budget_cat_${currentUser.id}_${selectedMonth}_${cat}`;
+                const savedCatCeiling = localStorage.getItem(catCeilingKey) || '';
+                const catSpent = data.categoryExpenses[cat] || 0;
+                const catCeilingVal = parseFloat(savedCatCeiling) || 0;
+                const catPercent = catCeilingVal > 0 ? ((catSpent / catCeilingVal) * 100).toFixed(1) : 0;
+
+                let barColor = "bg-indigo-600";
+                let warningText = "";
+                if (catCeilingVal > 0 && catSpent > catCeilingVal) {
+                    barColor = "bg-rose-500";
+                    warningText = `<span class="text-xs text-rose-600 font-semibold">Ultrapassado em ${(catSpent - catCeilingVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>`;
+                }
+
+                catContainer.innerHTML += `
+                    <div class="border border-slate-100 rounded-lg p-4 bg-slate-50/50 space-y-2">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                            <span class="font-bold text-slate-700">${cat}</span>
+                            <div class="flex items-center gap-2 w-full md:w-auto">
+                                <span class="text-xs text-slate-500 whitespace-nowrap">Teto (R$):</span>
+                                <input type="number" step="0.01" value="${savedCatCeiling}" oninput="saveCategoryCeiling('${cat}', this.value)" placeholder="Ex: 800.00" class="px-2 py-1 border rounded text-sm w-full md:w-32 outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs text-slate-600">
+                                <span>Gasto: <strong>${catSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></span>
+                                <span>${catCeilingVal > 0 ? `${catPercent}% do teto (${catCeilingVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})` : 'Sem teto definido'}</span>
+                            </div>
+                            ${catCeilingVal > 0 ? `
+                                <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                    <div class="${barColor} h-2 rounded-full transition-all" style="width: ${Math.min(catPercent, 100)}%"></div>
+                                </div>
+                            ` : ''}
+                            ${warningText}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function saveGlobalCeiling() {
+            const selectedMonth = document.getElementById('filter-situation-month').value;
+            const ceilingVal = document.getElementById('situation-ceiling-input').value;
+            if (!selectedMonth) return;
+
+            const ceilingKey = `budget_global_${currentUser.id}_${selectedMonth}`;
+            localStorage.setItem(ceilingKey, ceilingVal);
+            loadSituation();
+        }
+
+        function saveCategoryCeiling(categoryName, value) {
+            const selectedMonth = document.getElementById('filter-situation-month').value;
+            if (!selectedMonth) return;
+
+            const ceilingKey = `budget_cat_${currentUser.id}_${selectedMonth}_${categoryName}`;
+            localStorage.setItem(ceilingKey, value);
+            loadSituation();
         }
 
         async function loadCreditCardBill() {
             const selectedMonth = document.getElementById('filter-credit-month').value;
             if (!selectedMonth) return;
 
-            // 1. Buscar despesas a crédito
             const { data: creditTxs, error: errTxs } = await supabaseClient
                 .from('transactions')
                 .select('*')
@@ -531,7 +797,6 @@
                 return;
             }
 
-            // 2. Buscar abatimentos
             const { data: abatements, error: errAbat } = await supabaseClient
                 .from('credit_abatements')
                 .select('*');
@@ -540,7 +805,6 @@
                 console.error('Erro ao carregar abatimentos:', errAbat);
             }
 
-            // Popular select de compras específicas
             const purchaseSelect = document.getElementById('abatement-purchase');
             purchaseSelect.innerHTML = '';
             creditTxs.forEach(t => {
@@ -553,7 +817,6 @@
             let monthItems = [];
             let categoryTotals = {};
 
-            // Processar parcelas de crédito para o mês selecionado
             creditTxs.forEach(t => {
                 const numInst = t.installments && t.installments > 0 ? t.installments : 1;
                 const instAmount = Number(t.amount) / numInst;
@@ -579,7 +842,6 @@
             let totalCreditExpenses = monthItems.reduce((sum, item) => sum + item.amount, 0);
             let totalAbatements = 0;
 
-            // Processar abatimentos (calculando automaticamente o mês seguinte com base na data do abatimento)
             if (abatements) {
                 abatements.forEach(a => {
                     const targetM = getTargetMonthFromDate(a.date);
@@ -601,7 +863,6 @@
             const finalInvoiceTotal = totalCreditExpenses - totalAbatements;
             document.getElementById('credit-total-amount').innerText = finalInvoiceTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-            // Renderizar Resumo por Categoria
             const catContainer = document.getElementById('credit-category-breakdown');
             catContainer.innerHTML = '';
 
@@ -626,7 +887,6 @@
                 }
             }
 
-            // Renderizar Tabela
             const tbody = document.getElementById('credit-transactions-list');
             tbody.innerHTML = '';
 
@@ -760,23 +1020,6 @@
             });
         }
 
-        function calculateSummary(transactions) {
-            let income = 0;
-            let expense = 0;
-
-            transactions.forEach(t => {
-                const val = t.displayAmount !== undefined ? Number(t.displayAmount) : Number(t.amount);
-                if (t.type === 'income') income += val;
-                else expense += val;
-            });
-
-            const balance = income - expense;
-
-            document.getElementById('total-balance').innerText = balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            document.getElementById('total-income').innerText = income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            document.getElementById('total-expense').innerText = expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        }
-
         async function addTransaction(e) {
             e.preventDefault();
             const description = document.getElementById('desc').value;
@@ -843,7 +1086,7 @@
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
                     .then(() => console.log('PWA registrado com sucesso!'))
-                    .catch(err => console.log('Erro ao registrar PWÁ:', err));
+                    .catch(err => console.log('Erro ao registrar PWA:', err));
             });
         }
     </script>
