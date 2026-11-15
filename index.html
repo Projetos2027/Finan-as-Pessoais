@@ -48,6 +48,15 @@
                     <label class="block text-sm font-medium text-slate-600 mb-1">Senha</label>
                     <input type="password" id="password" required minlength="6" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
                 </div>
+                
+                <!-- Opção Manter Conectado -->
+                <div id="remember-me-container" class="flex items-center justify-between pt-1">
+                    <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                        <input type="checkbox" id="remember-me" checked class="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500">
+                        <span>Manter conectado</span>
+                    </label>
+                </div>
+
                 <button type="submit" id="auth-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition">Entrar</button>
             </form>
             <p class="text-center text-sm mt-4 text-slate-500">
@@ -350,7 +359,33 @@
         const SUPABASE_URL = 'https://gnuggwjbkirmelgvvcdl.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_h_BW8GNSu7DuN6GNp1gRUw_TMCTCL5F';
 
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Gerenciador de armazenamento dinâmico para respeitar a opção "Manter conectado"
+        const customStorage = {
+            getItem: (key) => {
+                const useSession = localStorage.getItem('supabase_use_session') === 'true';
+                return useSession ? sessionStorage.getItem(key) : localStorage.getItem(key);
+            },
+            setItem: (key, value) => {
+                const useSession = localStorage.getItem('supabase_use_session') === 'true';
+                if (useSession) {
+                    sessionStorage.setItem(key, value);
+                } else {
+                    localStorage.setItem(key, value);
+                }
+            },
+            removeItem: (key) => {
+                localStorage.removeItem(key);
+                sessionStorage.removeItem(key);
+            }
+        };
+
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+                storage: customStorage,
+                persistSession: true,
+                autoRefreshToken: true
+            }
+        });
 
         let isSignUp = false;
         let currentUser = null;
@@ -361,35 +396,42 @@
         const incomeCategories = ['Salário', '13º Salário', 'Férias', 'Apartamento Del Castilho', 'Outros'];
 
         document.addEventListener('DOMContentLoaded', async () => {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const todayStr = now.toISOString().split('T')[0];
+            try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const todayStr = now.toISOString().split('T')[0];
 
-            document.getElementById('filter-month').value = `${year}-${month}`;
-            document.getElementById('filter-credit-month').value = `${year}-${month}`;
-            document.getElementById('filter-situation-month').value = `${year}-${month}`;
-            document.getElementById('target-month').value = `${year}-${month}`;
-            document.getElementById('txn-date').value = todayStr;
-            document.getElementById('abatement-date').value = todayStr;
+                document.getElementById('filter-month').value = `${year}-${month}`;
+                document.getElementById('filter-credit-month').value = `${year}-${month}`;
+                document.getElementById('filter-situation-month').value = `${year}-${month}`;
+                document.getElementById('target-month').value = `${year}-${month}`;
+                document.getElementById('txn-date').value = todayStr;
+                document.getElementById('abatement-date').value = todayStr;
 
-            updateFormFields();
+                updateFormFields();
 
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                currentUser = session.user;
-                showDashboard();
-            }
-
-            supabaseClient.auth.onAuthStateChange((_event, session) => {
+                const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session) {
                     currentUser = session.user;
                     showDashboard();
                 } else {
-                    currentUser = null;
                     showAuth();
                 }
-            });
+
+                supabaseClient.auth.onAuthStateChange((_event, session) => {
+                    if (session) {
+                        currentUser = session.user;
+                        showDashboard();
+                    } else {
+                        currentUser = null;
+                        showAuth();
+                    }
+                });
+            } catch (err) {
+                console.error("Erro na inicialização:", err);
+                showAuth();
+            }
         });
 
         function switchTab(tab) {
@@ -495,6 +537,13 @@
             document.getElementById('auth-btn').innerText = isSignUp ? 'Cadastrar' : 'Entrar';
             document.getElementById('toggle-text').innerText = isSignUp ? 'Já tem uma conta?' : 'Não tem uma conta?';
             document.getElementById('toggle-btn').innerText = isSignUp ? 'Fazer login' : 'Criar conta';
+            
+            const rememberContainer = document.getElementById('remember-me-container');
+            if (isSignUp) {
+                rememberContainer.classList.add('hidden');
+            } else {
+                rememberContainer.classList.remove('hidden');
+            }
         }
 
         async function handleAuth(e) {
@@ -511,12 +560,16 @@
                     toggleAuthMode();
                 }
             } else {
+                const keepConnected = document.getElementById('remember-me').checked;
+                localStorage.setItem('supabase_use_session', keepConnected ? 'false' : 'true');
+
                 const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) alert('Erro ao entrar: ' + error.message);
             }
         }
 
         async function logout() {
+            localStorage.removeItem('supabase_use_session');
             await supabaseClient.auth.signOut();
         }
 
@@ -530,7 +583,7 @@
         }
 
         function showAuth() {
-            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('auth-section').classList.remove('hidden');
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('credit-card-section').classList.add('hidden');
             document.getElementById('situation-section').classList.add('hidden');
