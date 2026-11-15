@@ -132,9 +132,18 @@
                         </div>
                     </div>
 
-                    <div id="installments-container" class="grid grid-cols-1 md:grid-cols-4 gap-3 hidden">
-                        <div></div><div></div><div></div>
+                    <!-- Campos Extras para Cartão de Crédito -->
+                    <div id="credit-extra-container" class="grid grid-cols-1 md:grid-cols-4 gap-3 hidden">
                         <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Qual Cartão?</label>
+                            <select id="card-name" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="Nubank">Nubank</option>
+                                <option value="Itaú">Itaú</option>
+                                <option value="XP">XP</option>
+                                <option value="Outro Cartão">Outro Cartão</option>
+                            </select>
+                        </div>
+                        <div id="installments-wrapper" class="hidden md:col-span-3">
                             <label class="block text-xs font-medium text-slate-500 mb-1">Nº de Parcelas (vazio = 1)</label>
                             <input type="number" id="installments" min="1" placeholder="Ex: 3" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
@@ -178,9 +187,15 @@
             <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 class="text-lg font-bold text-slate-800">Fatura do Cartão de Crédito</h2>
-                    <p class="text-xs text-slate-500">Abatimentos feitos hoje diminuem a fatura do mês seguinte e reduzem o caixa do mês atual</p>
+                    <p class="text-xs text-slate-500">Selecione o cartão e o mês para visualizar a fatura específica</p>
                 </div>
-                <div>
+                <div class="flex gap-3 w-full md:w-auto">
+                    <select id="filter-credit-card" onchange="loadCreditCardBill()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50">
+                        <option value="Nubank">Nubank</option>
+                        <option value="Itaú">Itaú</option>
+                        <option value="XP">XP</option>
+                        <option value="Outro Cartão">Outro Cartão</option>
+                    </select>
                     <input type="month" id="filter-credit-month" onchange="loadCreditCardBill()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50">
                 </div>
             </div>
@@ -216,13 +231,13 @@
 
             <!-- Card Total da Fatura -->
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-                <p class="text-sm text-slate-500">Valor Total da Fatura (Líquido após abatimentos)</p>
+                <p class="text-sm text-slate-500">Valor Total da Fatura Líquida (Cartão selecionado)</p>
                 <p id="credit-total-amount" class="text-2xl font-bold text-indigo-600">R$ 0,00</p>
             </div>
 
             <!-- Resumo por Categoria -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
-                <h3 class="text-lg font-bold">Gastos por Categoria</h3>
+                <h3 class="text-lg font-bold">Gastos por Categoria (Neste Cartão)</h3>
                 <div id="credit-category-breakdown" class="space-y-3"></div>
             </div>
 
@@ -283,7 +298,7 @@
                     <h3 class="text-lg font-bold text-indigo-600">🎯 Teto Global de Gastos do Mês</h3>
                     <span id="max-ceiling-badge" class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-semibold">Máximo permitido: R$ 0,00</span>
                 </div>
-                <p class="text-xs text-slate-500">O teto global pode ser no máximo o valor que você recebe no mês menos a fatura do cartão de crédito.</p>
+                <p class="text-xs text-slate-500">O teto global pode ser no máximo o valor que você recebe no mês menos a fatura dos cartões de crédito.</p>
                 
                 <div class="flex flex-col md:flex-row gap-3 items-end">
                     <div class="flex-grow">
@@ -439,7 +454,8 @@
             const type = document.getElementById('type').value;
             const recurrence = document.getElementById('recurrence').value;
             const targetMonthContainer = document.getElementById('target-month-container');
-            const installmentsContainer = document.getElementById('installments-container');
+            const creditExtraContainer = document.getElementById('credit-extra-container');
+            const installmentsWrapper = document.getElementById('installments-wrapper');
             const paymentMethod = document.getElementById('payment-method').value;
 
             if (recurrence === 'eventual') {
@@ -450,10 +466,16 @@
                 document.getElementById('target-month').required = false;
             }
 
-            if (type === 'expense' && paymentMethod === 'crédito' && recurrence === 'eventual') {
-                installmentsContainer.classList.remove('hidden');
+            if (type === 'expense' && paymentMethod === 'crédito') {
+                creditExtraContainer.classList.remove('hidden');
+                if (recurrence === 'eventual') {
+                    installmentsWrapper.classList.remove('hidden');
+                } else {
+                    installmentsWrapper.classList.add('hidden');
+                }
             } else {
-                installmentsContainer.classList.add('hidden');
+                creditExtraContainer.classList.add('hidden');
+                installmentsWrapper.classList.add('hidden');
             }
         }
 
@@ -550,7 +572,7 @@
             return `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
         }
 
-        async function getCreditCardInvoiceForMonth(targetMonth) {
+        async function getTotalCreditCardInvoiceForMonth(targetMonth) {
             const { data: creditTxs } = await supabaseClient
                 .from('transactions')
                 .select('*')
@@ -686,7 +708,7 @@
                                     processedTransactions.push({
                                         ...t,
                                         displayAmount: instAmount,
-                                        displayDescription: `${t.description} (Parcela ${matchedInst.installmentNumber}/${numInst})`
+                                        displayDescription: `${t.description} [${t.card_name || 'Cartão'}] (Parcela ${matchedInst.installmentNumber}/${numInst})`
                                     });
                                 }
                             } else {
@@ -707,8 +729,8 @@
             if (!selectedMonth) return;
 
             const data = await calculateMonthData(selectedMonth);
-            const creditCardInvoice = await getCreditCardInvoiceForMonth(selectedMonth);
-            const maxGlobalCeiling = Math.max(0, data.income - creditCardInvoice);
+            const totalCreditInvoice = await getTotalCreditCardInvoiceForMonth(selectedMonth);
+            const maxGlobalCeiling = Math.max(0, data.income - totalCreditInvoice);
 
             document.getElementById('max-ceiling-badge').innerText = `Máximo permitido: ${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
 
@@ -763,7 +785,7 @@
             } else {
                 percentLabel.innerText = "Nenhum teto global definido";
                 progressBar.style.width = "0%";
-                alertEl.innerText = `Seu teto pode ser de até ${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Receitas R$ ${data.income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - Fatura Cartão R$ ${creditCardInvoice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`;
+                alertEl.innerText = `Seu teto pode ser de até ${maxGlobalCeiling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Receitas R$ ${data.income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - Faturas Cartões R$ ${totalCreditInvoice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`;
             }
 
             const catContainer = document.getElementById('category-ceilings-container');
@@ -830,9 +852,9 @@
 
         async function loadCreditCardBill() {
             const selectedMonth = document.getElementById('filter-credit-month').value;
+            const selectedCard = document.getElementById('filter-credit-card').value;
             if (!selectedMonth) return;
 
-            // Garantir que temos o cache de transações atualizado para edição
             const { data: rawTxs } = await supabaseClient.from('transactions').select('*');
             rawTransactionsCache = rawTxs || [];
 
@@ -840,7 +862,8 @@
                 .from('transactions')
                 .select('*')
                 .eq('type', 'expense')
-                .eq('payment_method', 'crédito');
+                .eq('payment_method', 'crédito')
+                .eq('card_name', selectedCard);
 
             if (errTxs) {
                 console.error('Erro ao carregar compras a crédito:', errTxs);
@@ -849,7 +872,8 @@
 
             const { data: abatements, error: errAbat } = await supabaseClient
                 .from('credit_abatements')
-                .select('*');
+                .select('*')
+                .eq('card_name', selectedCard);
 
             if (errAbat) {
                 console.error('Erro ao carregar abatimentos:', errAbat);
@@ -857,37 +881,41 @@
 
             const purchaseSelect = document.getElementById('abatement-purchase');
             purchaseSelect.innerHTML = '';
-            creditTxs.forEach(t => {
-                const opt = document.createElement('option');
-                opt.value = t.id;
-                opt.textContent = `${t.description} (Total: R$ ${t.amount})`;
-                purchaseSelect.appendChild(opt);
-            });
+            if (creditTxs) {
+                creditTxs.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = `${t.description} (Total: R$ ${t.amount})`;
+                    purchaseSelect.appendChild(opt);
+                });
+            }
 
             let monthItems = [];
             let categoryTotals = {};
 
-            creditTxs.forEach(t => {
-                const numInst = t.installments && t.installments > 0 ? t.installments : 1;
-                const instAmount = Number(t.amount) / numInst;
-                const instMonths = getInstallmentMonths(t.date, numInst);
+            if (creditTxs) {
+                creditTxs.forEach(t => {
+                    const numInst = t.installments && t.installments > 0 ? t.installments : 1;
+                    const instAmount = Number(t.amount) / numInst;
+                    const instMonths = getInstallmentMonths(t.date, numInst);
 
-                instMonths.forEach(im => {
-                    if (im.month === selectedMonth) {
-                        monthItems.push({
-                            id: t.id,
-                            date: t.date,
-                            description: t.description,
-                            category: t.category,
-                            amount: instAmount,
-                            installmentText: `${im.installmentNumber}/${numInst}`,
-                            isAbatement: false
-                        });
+                    instMonths.forEach(im => {
+                        if (im.month === selectedMonth) {
+                            monthItems.push({
+                                id: t.id,
+                                date: t.date,
+                                description: t.description,
+                                category: t.category,
+                                amount: instAmount,
+                                installmentText: `${im.installmentNumber}/${numInst}`,
+                                isAbatement: false
+                            });
 
-                        categoryTotals[t.category] = (categoryTotals[t.category] || 0) + instAmount;
-                    }
+                            categoryTotals[t.category] = (categoryTotals[t.category] || 0) + instAmount;
+                        }
+                    });
                 });
-            });
+            }
 
             let totalCreditExpenses = monthItems.reduce((sum, item) => sum + item.amount, 0);
             let totalAbatements = 0;
@@ -918,7 +946,7 @@
 
             const validCategories = Object.entries(categoryTotals);
             if (validCategories.length === 0) {
-                catContainer.innerHTML = `<p class="text-sm text-slate-400">Nenhum gasto a crédito neste mês.</p>`;
+                catContainer.innerHTML = `<p class="text-sm text-slate-400">Nenhum gasto a crédito neste cartão para este mês.</p>`;
             } else {
                 for (const [cat, val] of validCategories) {
                     const formattedVal = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -982,6 +1010,7 @@
             const type = document.getElementById('abatement-type').value;
             const amount = parseFloat(document.getElementById('abatement-amount').value);
             const date = document.getElementById('abatement-date').value;
+            const selectedCard = document.getElementById('filter-credit-card').value;
             
             let transactionId = null;
             let description = 'Abatimento / Pagamento avulso';
@@ -999,7 +1028,8 @@
                     transaction_id: transactionId,
                     amount: amount,
                     date: date,
-                    description: description
+                    description: description,
+                    card_name: selectedCard
                 }
             ]);
 
@@ -1050,7 +1080,7 @@
 
                 let paymentInfo = '';
                 if (t.type === 'expense') {
-                    const pm = t.payment_method === 'crédito' ? `Crédito (${t.installments || 1}x)` : 'À vista';
+                    const pm = t.payment_method === 'crédito' ? `Cartão: ${t.card_name || 'Nubank'} (${t.installments || 1}x)` : 'À vista';
                     paymentInfo = `<br><span class="text-xs text-slate-400">${pm}</span>`;
                 }
 
@@ -1099,8 +1129,9 @@
                 if (t.target_month) document.getElementById('target-month').value = t.target_month;
                 if (t.payment_method) document.getElementById('payment-method').value = t.payment_method;
                 toggleFormLogic();
-                if (t.payment_method === 'crédito' && t.installments) {
-                    document.getElementById('installments').value = t.installments;
+                if (t.payment_method === 'crédito') {
+                    if (t.card_name) document.getElementById('card-name').value = t.card_name;
+                    if (t.installments) document.getElementById('installments').value = t.installments;
                 }
             } else {
                 if (t.target_month) document.getElementById('target-month').value = t.target_month;
@@ -1136,16 +1167,18 @@
             let paymentMethod = 'à vista';
             let installments = 1;
             let targetMonth = null;
+            let cardName = null;
 
             if (type === 'expense') {
                 paymentMethod = document.getElementById('payment-method').value;
-                if (recurrence === 'eventual') {
-                    if (paymentMethod === 'à vista') {
-                        targetMonth = document.getElementById('target-month').value;
-                    } else if (paymentMethod === 'crédito') {
+                if (paymentMethod === 'crédito') {
+                    cardName = document.getElementById('card-name').value;
+                    if (recurrence === 'eventual') {
                         const instVal = document.getElementById('installments').value;
                         installments = instVal ? parseInt(instVal) : 1;
                     }
+                } else if (recurrence === 'eventual') {
+                    targetMonth = document.getElementById('target-month').value;
                 }
             } else {
                 if (recurrence === 'eventual') {
@@ -1163,7 +1196,8 @@
                     target_month: targetMonth, 
                     payment_method: paymentMethod,
                     installments: installments,
-                    date
+                    date,
+                    card_name: cardName
                 }).eq('id', editingTransactionId);
 
                 if (error) {
@@ -1184,7 +1218,8 @@
                         payment_method: paymentMethod,
                         installments: installments,
                         date, 
-                        user_id: currentUser.id 
+                        user_id: currentUser.id,
+                        card_name: cardName
                     }
                 ]);
 
