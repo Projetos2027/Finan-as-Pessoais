@@ -145,14 +145,17 @@
                     <div id="credit-extra-container" class="grid grid-cols-1 md:grid-cols-4 gap-3 hidden">
                         <div>
                             <label class="block text-xs font-medium text-slate-500 mb-1">Qual Cartão?</label>
-                            <select id="card-name" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                            <select id="card-name" onchange="toggleCustomCardInput()" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                                 <option value="Nubank">Nubank</option>
-                                <option value="Itaú">Itaú</option>
-                                <option value="XP">XP</option>
-                                <option value="Outro Cartão">Outro Cartão</option>
+                                <option value="Bradesco">Bradesco</option>
+                                <option value="__new__">+ Novo cartão...</option>
                             </select>
                         </div>
-                        <div id="installments-wrapper" class="hidden md:col-span-3">
+                        <div id="custom-card-wrapper" class="hidden">
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Nome do Novo Cartão</label>
+                            <input type="text" id="custom-card-name" placeholder="Ex: Itaú, Inter, XP..." class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div id="installments-wrapper" class="hidden">
                             <label class="block text-xs font-medium text-slate-500 mb-1">Nº de Parcelas (vazio = 1)</label>
                             <input type="number" id="installments" min="1" placeholder="Ex: 3" class="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
@@ -201,9 +204,7 @@
                 <div class="flex gap-3 w-full md:w-auto">
                     <select id="filter-credit-card" onchange="loadCreditCardBill()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50">
                         <option value="Nubank">Nubank</option>
-                        <option value="Itaú">Itaú</option>
-                        <option value="XP">XP</option>
-                        <option value="Outro Cartão">Outro Cartão</option>
+                        <option value="Bradesco">Bradesco</option>
                     </select>
                     <input type="month" id="filter-credit-month" onchange="loadCreditCardBill()" class="px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50">
                 </div>
@@ -392,6 +393,7 @@
         let editingTransactionId = null;
         let rawTransactionsCache = [];
 
+        const defaultCards = ['Nubank', 'Bradesco'];
         const expenseCategories = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Outros'];
         const incomeCategories = ['Salário', '13º Salário', 'Férias', 'Apartamento Del Castilho', 'Outros'];
 
@@ -433,6 +435,65 @@
                 showAuth();
             }
         });
+
+        // Atualiza dinamicamente as opções de cartões juntando padrão + cadastrados no banco
+        function syncCardOptions(transactionsList = []) {
+            const cardSet = new Set(defaultCards);
+            transactionsList.forEach(t => {
+                if (t.payment_method === 'crédito' && t.card_name && t.card_name.trim() !== '') {
+                    cardSet.add(t.card_name.trim());
+                }
+            });
+
+            const sortedCards = Array.from(cardSet);
+
+            // 1. Select do formulário de transação
+            const formCardSelect = document.getElementById('card-name');
+            const currentFormVal = formCardSelect.value;
+            formCardSelect.innerHTML = '';
+            sortedCards.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                formCardSelect.appendChild(opt);
+            });
+            const newOpt = document.createElement('option');
+            newOpt.value = '__new__';
+            newOpt.textContent = '+ Novo cartão...';
+            formCardSelect.appendChild(newOpt);
+
+            if (currentFormVal && (sortedCards.includes(currentFormVal) || currentFormVal === '__new__')) {
+                formCardSelect.value = currentFormVal;
+            }
+            toggleCustomCardInput();
+
+            // 2. Select do filtro de fatura
+            const filterCardSelect = document.getElementById('filter-credit-card');
+            const currentFilterVal = filterCardSelect.value;
+            filterCardSelect.innerHTML = '';
+            sortedCards.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                filterCardSelect.appendChild(opt);
+            });
+            if (currentFilterVal && sortedCards.includes(currentFilterVal)) {
+                filterCardSelect.value = currentFilterVal;
+            }
+        }
+
+        function toggleCustomCardInput() {
+            const cardSelect = document.getElementById('card-name').value;
+            const customWrapper = document.getElementById('custom-card-wrapper');
+            const customInput = document.getElementById('custom-card-name');
+            if (cardSelect === '__new__') {
+                customWrapper.classList.remove('hidden');
+                customInput.required = true;
+            } else {
+                customWrapper.classList.add('hidden');
+                customInput.required = false;
+            }
+        }
 
         function switchTab(tab) {
             const tabDashboard = document.getElementById('tab-dashboard');
@@ -510,6 +571,7 @@
 
             if (type === 'expense' && paymentMethod === 'crédito') {
                 creditExtraContainer.classList.remove('hidden');
+                toggleCustomCardInput();
                 if (recurrence === 'eventual') {
                     installmentsWrapper.classList.remove('hidden');
                 } else {
@@ -518,6 +580,7 @@
             } else {
                 creditExtraContainer.classList.add('hidden');
                 installmentsWrapper.classList.add('hidden');
+                document.getElementById('custom-card-name').required = false;
             }
         }
 
@@ -739,6 +802,8 @@
 
             const { data: rawTxs } = await supabaseClient.from('transactions').select('*').order('date', { ascending: false });
             rawTransactionsCache = rawTxs || [];
+            syncCardOptions(rawTransactionsCache);
+
             let processedTransactions = [];
 
             if (rawTransactionsCache) {
@@ -761,7 +826,7 @@
                                     processedTransactions.push({
                                         ...t,
                                         displayAmount: instAmount,
-                                        displayDescription: `${t.description} [${t.card_name || 'Cartão'}] (Parcela ${matchedInst.installmentNumber}/${numInst})`
+                                        displayDescription: `${t.description} [${t.card_name || 'Nubank'}] (Parcela ${matchedInst.installmentNumber}/${numInst})`
                                     });
                                 }
                             } else {
@@ -905,11 +970,13 @@
 
         async function loadCreditCardBill() {
             const selectedMonth = document.getElementById('filter-credit-month').value;
-            const selectedCard = document.getElementById('filter-credit-card').value;
             if (!selectedMonth) return;
 
             const { data: rawTxs } = await supabaseClient.from('transactions').select('*');
             rawTransactionsCache = rawTxs || [];
+            syncCardOptions(rawTransactionsCache);
+
+            const selectedCard = document.getElementById('filter-credit-card').value;
 
             const { data: creditTxs, error: errTxs } = await supabaseClient
                 .from('transactions')
@@ -1161,6 +1228,7 @@
             }
             if (!t) return;
 
+            syncCardOptions(rawTransactionsCache);
             switchTab('dashboard');
 
             editingTransactionId = id;
@@ -1183,7 +1251,15 @@
                 if (t.payment_method) document.getElementById('payment-method').value = t.payment_method;
                 toggleFormLogic();
                 if (t.payment_method === 'crédito') {
-                    if (t.card_name) document.getElementById('card-name').value = t.card_name;
+                    const cardSelect = document.getElementById('card-name');
+                    const cardExists = Array.from(cardSelect.options).some(opt => opt.value === t.card_name);
+                    if (t.card_name && cardExists) {
+                        cardSelect.value = t.card_name;
+                    } else if (t.card_name) {
+                        cardSelect.value = '__new__';
+                        document.getElementById('custom-card-name').value = t.card_name;
+                    }
+                    toggleCustomCardInput();
                     if (t.installments) document.getElementById('installments').value = t.installments;
                 }
             } else {
@@ -1199,6 +1275,7 @@
             document.getElementById('txn-submit-btn').innerText = 'Adicionar Lançamento';
             document.getElementById('cancel-edit-btn').classList.add('hidden');
             document.getElementById('transaction-form').reset();
+            document.getElementById('custom-card-wrapper').classList.add('hidden');
 
             const now = new Date();
             const year = now.getFullYear();
@@ -1225,7 +1302,17 @@
             if (type === 'expense') {
                 paymentMethod = document.getElementById('payment-method').value;
                 if (paymentMethod === 'crédito') {
-                    cardName = document.getElementById('card-name').value;
+                    const selectedCard = document.getElementById('card-name').value;
+                    if (selectedCard === '__new__') {
+                        cardName = document.getElementById('custom-card-name').value.trim();
+                        if (!cardName) {
+                            alert('Por favor, informe o nome do novo cartão.');
+                            return;
+                        }
+                    } else {
+                        cardName = selectedCard;
+                    }
+
                     if (recurrence === 'eventual') {
                         const instVal = document.getElementById('installments').value;
                         installments = instVal ? parseInt(instVal) : 1;
@@ -1280,6 +1367,7 @@
                     alert('Erro ao salvar: ' + error.message);
                 } else {
                     document.getElementById('transaction-form').reset();
+                    document.getElementById('custom-card-wrapper').classList.add('hidden');
                     document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
                     document.getElementById('filter-month').value = targetMonth || document.getElementById('filter-month').value;
                     updateFormFields();
