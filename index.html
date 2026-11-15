@@ -196,12 +196,12 @@
         <!-- Seção: Fatura Cartão -->
         <div id="credit-card-section" class="hidden space-y-6">
             
-            <!-- Resumo em Destaque no Topo (Acima dos Seletores) -->
+            <!-- Resumo Global de TODOS os Cartões no Topo -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-indigo-600 text-white p-5 rounded-xl shadow-sm flex flex-col justify-between">
-                    <p class="text-xs text-indigo-100 uppercase tracking-wider font-semibold">Valor da Fatura no Mês</p>
+                    <p class="text-xs text-indigo-100 uppercase tracking-wider font-semibold">Total Geral (Todos os Cartões)</p>
                     <p id="credit-top-summary-amount" class="text-2xl font-bold mt-2">R$ 0,00</p>
-                    <p id="credit-top-summary-label" class="text-xs text-indigo-200 mt-1">Selecione o cartão e o mês</p>
+                    <p id="credit-top-summary-label" class="text-xs text-indigo-200 mt-1">Soma de todas as faturas do mês</p>
                 </div>
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 md:col-span-2 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div>
@@ -247,9 +247,9 @@
                 </form>
             </div>
 
-            <!-- Card Total da Fatura -->
+            <!-- Card Total da Fatura (Do Cartão Selecionado) -->
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
-                <p class="text-sm text-slate-500">Valor Total da Fatura Líquida (Cartão selecionado)</p>
+                <p class="text-sm text-slate-500">Valor Total da Fatura Líquida (<span id="selected-card-label">Cartão</span>)</p>
                 <p id="credit-total-amount" class="text-2xl font-bold text-indigo-600">R$ 0,00</p>
             </div>
 
@@ -985,7 +985,14 @@
             syncCardOptions(rawTransactionsCache);
 
             const selectedCard = document.getElementById('filter-credit-card').value;
+            document.getElementById('selected-card-label').innerText = selectedCard;
 
+            // 1. Atualizar o Card Superior com a soma de TODOS os cartões para o mês selecionado
+            const totalAllCardsInvoice = await getTotalCreditCardInvoiceForMonth(selectedMonth);
+            document.getElementById('credit-top-summary-amount').innerText = totalAllCardsInvoice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('credit-top-summary-label').innerText = `Mês ${selectedMonth.split('-').reverse().join('/')}`;
+
+            // 2. Carregar dados específicos do cartão selecionado para a tabela e resumo inferior
             const { data: creditTxs, error: errTxs } = await supabaseClient
                 .from('transactions')
                 .select('*')
@@ -1067,12 +1074,7 @@
             }
 
             const finalInvoiceTotal = totalCreditExpenses - totalAbatements;
-            const formattedInvoiceTotal = finalInvoiceTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            
-            // Atualizar tanto o card do topo quanto o card inferior
-            document.getElementById('credit-top-summary-amount').innerText = formattedInvoiceTotal;
-            document.getElementById('credit-top-summary-label').innerText = `${selectedCard} • Mês ${selectedMonth.split('-').reverse().join('/')}`;
-            document.getElementById('credit-total-amount').innerText = formattedInvoiceTotal;
+            document.getElementById('credit-total-amount').innerText = finalInvoiceTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
             const catContainer = document.getElementById('credit-category-breakdown');
             catContainer.innerHTML = '';
