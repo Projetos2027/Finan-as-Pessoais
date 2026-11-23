@@ -467,6 +467,10 @@
         let expenseCategories = [...defaultExpenseCategories];
         let incomeCategories = [...defaultIncomeCategories];
 
+        function sortCategoriesAlphabetically(list) {
+            return [...list].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+        }
+
         function getCategoryStorageKey(type) {
             const uid = currentUser ? currentUser.id : 'guest';
             return `user_categories_${type}_${uid}`;
@@ -474,21 +478,26 @@
 
         function loadUserCategories() {
             if (!currentUser) {
-                expenseCategories = [...defaultExpenseCategories];
-                incomeCategories = [...defaultIncomeCategories];
+                expenseCategories = sortCategoriesAlphabetically(defaultExpenseCategories);
+                incomeCategories = sortCategoriesAlphabetically(defaultIncomeCategories);
                 return;
             }
             const savedExp = localStorage.getItem(getCategoryStorageKey('expense'));
             const savedInc = localStorage.getItem(getCategoryStorageKey('income'));
 
-            expenseCategories = savedExp ? JSON.parse(savedExp) : [...defaultExpenseCategories];
-            incomeCategories = savedInc ? JSON.parse(savedInc) : [...defaultIncomeCategories];
+            expenseCategories = sortCategoriesAlphabetically(savedExp ? JSON.parse(savedExp) : defaultExpenseCategories);
+            incomeCategories = sortCategoriesAlphabetically(savedInc ? JSON.parse(savedInc) : defaultIncomeCategories);
         }
 
         function saveUserCategories(type) {
             if (!currentUser) return;
-            const list = type === 'expense' ? expenseCategories : incomeCategories;
-            localStorage.setItem(getCategoryStorageKey(type), JSON.stringify(list));
+            if (type === 'expense') {
+                expenseCategories = sortCategoriesAlphabetically(expenseCategories);
+                localStorage.setItem(getCategoryStorageKey('expense'), JSON.stringify(expenseCategories));
+            } else {
+                incomeCategories = sortCategoriesAlphabetically(incomeCategories);
+                localStorage.setItem(getCategoryStorageKey('income'), JSON.stringify(incomeCategories));
+            }
         }
 
         function renderSettingsCategories() {
@@ -496,11 +505,14 @@
             const incList = document.getElementById('settings-income-categories');
             if (!expList || !incList) return;
 
+            const sortedExp = sortCategoriesAlphabetically(expenseCategories);
+            const sortedInc = sortCategoriesAlphabetically(incomeCategories);
+
             expList.innerHTML = '';
-            if (expenseCategories.length === 0) {
+            if (sortedExp.length === 0) {
                 expList.innerHTML = `<li class="py-3 text-slate-400 text-xs">Nenhuma categoria cadastrada.</li>`;
             } else {
-                expenseCategories.forEach(cat => {
+                sortedExp.forEach(cat => {
                     expList.innerHTML += `
                         <li class="py-2.5 flex justify-between items-center">
                             <span class="font-medium text-slate-700">${cat}</span>
@@ -511,10 +523,10 @@
             }
 
             incList.innerHTML = '';
-            if (incomeCategories.length === 0) {
+            if (sortedInc.length === 0) {
                 incList.innerHTML = `<li class="py-3 text-slate-400 text-xs">Nenhuma categoria cadastrada.</li>`;
             } else {
-                incomeCategories.forEach(cat => {
+                sortedInc.forEach(cat => {
                     incList.innerHTML += `
                         <li class="py-2.5 flex justify-between items-center">
                             <span class="font-medium text-slate-700">${cat}</span>
@@ -572,6 +584,7 @@
                 document.getElementById('txn-date').value = todayStr;
                 document.getElementById('abatement-date').value = todayStr;
 
+                loadUserCategories();
                 updateFormFields();
 
                 const { data: { session } } = await supabaseClient.auth.getSession();
@@ -699,7 +712,7 @@
             const prevSelected = categorySelect.value;
             
             categorySelect.innerHTML = '';
-            const categories = type === 'income' ? incomeCategories : expenseCategories;
+            const categories = sortCategoriesAlphabetically(type === 'income' ? incomeCategories : expenseCategories);
             categories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat;
@@ -1100,7 +1113,9 @@
             const catContainer = document.getElementById('category-ceilings-container');
             catContainer.innerHTML = '';
 
-            expenseCategories.forEach(cat => {
+            const sortedExpCategories = sortCategoriesAlphabetically(expenseCategories);
+
+            sortedExpCategories.forEach(cat => {
                 const catCeilingKey = `budget_cat_${currentUser.id}_${selectedMonth}_${cat}`;
                 const savedCatCeiling = localStorage.getItem(catCeilingKey) || '';
                 const catSpent = data.categoryExpenses[cat] || 0;
@@ -1284,7 +1299,7 @@
             const catContainer = document.getElementById('credit-category-breakdown');
             catContainer.innerHTML = '';
 
-            const validCategories = Object.entries(categoryTotals);
+            const validCategories = Object.entries(categoryTotals).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { sensitivity: 'base' }));
             if (validCategories.length === 0) {
                 catContainer.innerHTML = `<p class="text-sm text-slate-400">Nenhum gasto a crédito neste cartão para este mês.</p>`;
             } else {
