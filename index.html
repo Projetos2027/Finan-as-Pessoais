@@ -643,7 +643,6 @@
             }
         });
 
-        // Atualiza dinamicamente as opções de cartões juntando padrão + cadastrados no banco
         function syncCardOptions(transactionsList = []) {
             const cardSet = new Set(defaultCards);
             transactionsList.forEach(t => {
@@ -654,7 +653,6 @@
 
             const sortedCards = Array.from(cardSet);
 
-            // 1. Select do formulário de transação
             const formCardSelect = document.getElementById('card-name');
             const currentFormVal = formCardSelect.value;
             formCardSelect.innerHTML = '';
@@ -674,7 +672,6 @@
             }
             toggleCustomCardInput();
 
-            // 2. Select do filtro de fatura
             const filterCardSelect = document.getElementById('filter-credit-card');
             const currentFilterVal = filterCardSelect.value;
             filterCardSelect.innerHTML = '';
@@ -1018,15 +1015,19 @@
 
             if (abatements) {
                 abatements.forEach(a => {
-                    // Abatimento sai do caixa no mês em que foi pago
+                    const abatVal = Number(a.amount);
+                    // 1. No mês em que o abatimento é feito: entra na conta diminuindo o saldo do teto da categoria
                     if (a.date && a.date.startsWith(targetMonth)) {
-                        totalExpense += Number(a.amount);
-                        categoryExpenses['Abatimento'] += Number(a.amount);
+                        totalExpense += abatVal;
+                        categoryExpenses['Abatimento'] += abatVal;
+                        if (a.category && categoryExpenses[a.category] !== undefined) {
+                            categoryExpenses[a.category] += abatVal;
+                        }
                     }
-                    // E reduz o gasto da categoria específica na fatura do mês seguinte
+                    // 2. No mês de referência da fatura: libera o valor naquela categoria
                     const targetM = getTargetMonthFromDate(a.date);
                     if (targetM === targetMonth && a.category && categoryExpenses[a.category] !== undefined) {
-                        categoryExpenses[a.category] = Math.max(0, categoryExpenses[a.category] - Number(a.amount));
+                        categoryExpenses[a.category] = Math.max(0, categoryExpenses[a.category] - abatVal);
                     }
                 });
             }
@@ -1224,7 +1225,6 @@
             rawTransactionsCache = rawTxs || [];
             syncCardOptions(rawTransactionsCache);
 
-            // 1. Calcular o total geral e preencher o detalhamento por cartão dentro da caixa azul única
             const cardSet = new Set(defaultCards);
             rawTransactionsCache.forEach(t => {
                 if (t.payment_method === 'crédito' && t.card_name && t.card_name.trim() !== '') {
@@ -1251,7 +1251,6 @@
             document.getElementById('credit-total-month-label').innerText = `Mês ${selectedMonth.split('-').reverse().join('/')}`;
             document.getElementById('credit-cards-breakdown-list').innerHTML = breakdownHtml;
 
-            // 2. Carregar dados específicos do cartão selecionado para a tabela e resumo inferior
             const selectedCard = document.getElementById('filter-credit-card').value;
             document.getElementById('selected-card-label').innerText = selectedCard;
 
@@ -1326,7 +1325,6 @@
                         const abatVal = Number(a.amount);
                         totalAbatements += abatVal;
 
-                        // Se o abatimento tiver categoria associada, desconta daquela categoria
                         if (a.category && categoryTotals[a.category] !== undefined) {
                             categoryTotals[a.category] = Math.max(0, categoryTotals[a.category] - abatVal);
                         }
