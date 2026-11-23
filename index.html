@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Chart.js CDN para BI -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Configurações PWA -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4f46e5">
@@ -35,6 +37,7 @@
                 <button type="button" onclick="switchTab('dashboard')" id="tab-dashboard" class="py-2.5 border-b-2 border-white text-white whitespace-nowrap">Painel Principal</button>
                 <button type="button" onclick="switchTab('credit')" id="tab-credit" class="py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition whitespace-nowrap">Fatura Cartão</button>
                 <button type="button" onclick="switchTab('situation')" id="tab-situation" class="py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition whitespace-nowrap">Situação do Mês</button>
+                <button type="button" onclick="switchTab('bi')" id="tab-bi" class="py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition whitespace-nowrap">BI & Perspectivas</button>
             </div>
         </div>
     </header>
@@ -390,6 +393,113 @@
 
         </div>
 
+        <!-- Seção: BI & Perspectivas -->
+        <div id="bi-section" class="hidden space-y-6">
+
+            <!-- Controles do BI -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">📊 BI & Perspectivas</h2>
+                    <p class="text-xs text-slate-500">Compare meses, analise categorias e acompanhe projeções futuras</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-500">Mês Base</label>
+                        <input type="month" id="bi-base-month" onchange="loadBI()" class="px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 font-medium">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-500">Horizonte (Meses)</label>
+                        <select id="bi-horizon-months" onchange="loadBI()" class="px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 font-medium">
+                            <option value="3">Próximos 3 meses</option>
+                            <option value="6" selected>Próximos 6 meses</option>
+                            <option value="12">Próximos 12 meses</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs Comparativos -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                    <p class="text-xs text-slate-500">Saldo Projetado (Mês Base)</p>
+                    <p id="bi-kpi-balance" class="text-xl font-bold text-slate-800 mt-1">R$ 0,00</p>
+                    <p id="bi-kpi-balance-diff" class="text-xs mt-1 text-slate-500">vs mês anterior</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                    <p class="text-xs text-slate-500">Despesas do Mês Base</p>
+                    <p id="bi-kpi-expense" class="text-xl font-bold text-rose-600 mt-1">R$ 0,00</p>
+                    <p id="bi-kpi-expense-diff" class="text-xs mt-1 text-slate-500">vs mês anterior</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                    <p class="text-xs text-slate-500">Parcelas Futuras em Aberto</p>
+                    <p id="bi-kpi-future-installments" class="text-xl font-bold text-indigo-600 mt-1">R$ 0,00</p>
+                    <p class="text-xs mt-1 text-slate-400">A partir do mês base</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                    <p class="text-xs text-slate-500">Saldo Acumulado no Horizonte</p>
+                    <p id="bi-kpi-horizon-balance" class="text-xl font-bold text-emerald-600 mt-1">R$ 0,00</p>
+                    <p id="bi-kpi-horizon-label" class="text-xs mt-1 text-slate-400">Próximos 6 meses</p>
+                </div>
+            </div>
+
+            <!-- Gráfico 1: Perspectiva Mensal (Receitas vs Despesas vs Saldo) -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-3">
+                <div>
+                    <h3 class="text-md font-bold text-slate-800">Perspectiva Mensal: Receitas, Despesas e Saldo</h3>
+                    <p class="text-xs text-slate-500">Inclui recorrentes cadastrados, lançamentos avulsos e parcelas de cartão programadas</p>
+                </div>
+                <div class="relative h-72 w-full">
+                    <canvas id="biCashflowChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráficos 2 e 3: Categorias e Cartões -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-3">
+                    <div>
+                        <h3 class="text-md font-bold text-slate-800">Gastos por Categoria (Mês Base)</h3>
+                        <p class="text-xs text-slate-500">Distribuição percentual das despesas</p>
+                    </div>
+                    <div class="relative h-64 w-full">
+                        <canvas id="biCategoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-3">
+                    <div>
+                        <h3 class="text-md font-bold text-slate-800">Evolução das Faturas por Cartão</h3>
+                        <p class="text-xs text-slate-500">Compromisso mensal nos cartões de crédito</p>
+                    </div>
+                    <div class="relative h-64 w-full">
+                        <canvas id="biCardsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela de Perspectiva Mês a Mês -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="p-4 border-b border-slate-100">
+                    <h3 class="text-md font-bold text-slate-800">Tabela de Perspectivas Mês a Mês</h3>
+                    <p class="text-xs text-slate-500">Detalhamento de receitas, despesas, faturas de cartão e saldo previsto</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                                <th class="p-3">Mês</th>
+                                <th class="p-3 text-right">Receitas</th>
+                                <th class="p-3 text-right">Despesas Totais</th>
+                                <th class="p-3 text-right">Faturas Cartão</th>
+                                <th class="p-3 text-right">Saldo Previsto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bi-projection-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
         <!-- Seção: Configurações -->
         <div id="settings-section" class="hidden space-y-6">
             
@@ -466,6 +576,10 @@
         let editingAbatementId = null;
         let rawTransactionsCache = [];
         let creditAbatementsCache = [];
+
+        let biCashflowChartInstance = null;
+        let biCategoryChartInstance = null;
+        let biCardsChartInstance = null;
 
         const defaultCards = ['Nubank', 'Bradesco'];
         const defaultExpenseCategories = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Outros'];
@@ -601,12 +715,14 @@
                 const now = new Date();
                 const year = now.getFullYear();
                 const month = String(now.getMonth() + 1).padStart(2, '0');
+                const currentYM = `${year}-${month}`;
                 const todayStr = now.toISOString().split('T')[0];
 
-                document.getElementById('filter-month').value = `${year}-${month}`;
-                document.getElementById('filter-credit-month').value = `${year}-${month}`;
-                document.getElementById('filter-situation-month').value = `${year}-${month}`;
-                document.getElementById('target-month').value = `${year}-${month}`;
+                document.getElementById('filter-month').value = currentYM;
+                document.getElementById('filter-credit-month').value = currentYM;
+                document.getElementById('filter-situation-month').value = currentYM;
+                document.getElementById('bi-base-month').value = currentYM;
+                document.getElementById('target-month').value = currentYM;
                 document.getElementById('txn-date').value = todayStr;
                 document.getElementById('abatement-date').value = todayStr;
 
@@ -703,16 +819,18 @@
             const tabDashboard = document.getElementById('tab-dashboard');
             const tabCredit = document.getElementById('tab-credit');
             const tabSituation = document.getElementById('tab-situation');
+            const tabBi = document.getElementById('tab-bi');
             
             const dashboardSection = document.getElementById('dashboard-section');
             const creditSection = document.getElementById('credit-card-section');
             const situationSection = document.getElementById('situation-section');
+            const biSection = document.getElementById('bi-section');
             const settingsSection = document.getElementById('settings-section');
 
-            [tabDashboard, tabCredit, tabSituation].forEach(t => {
+            [tabDashboard, tabCredit, tabSituation, tabBi].forEach(t => {
                 t.className = "py-2.5 border-b-2 border-transparent text-indigo-200 hover:text-white transition whitespace-nowrap";
             });
-            [dashboardSection, creditSection, situationSection, settingsSection].forEach(s => s.classList.add('hidden'));
+            [dashboardSection, creditSection, situationSection, biSection, settingsSection].forEach(s => s.classList.add('hidden'));
 
             if (tab === 'dashboard') {
                 tabDashboard.className = "py-2.5 border-b-2 border-white text-white whitespace-nowrap";
@@ -728,6 +846,10 @@
                 tabSituation.className = "py-2.5 border-b-2 border-white text-white whitespace-nowrap";
                 situationSection.classList.remove('hidden');
                 loadSituation();
+            } else if (tab === 'bi') {
+                tabBi.className = "py-2.5 border-b-2 border-white text-white whitespace-nowrap";
+                biSection.classList.remove('hidden');
+                loadBI();
             } else if (tab === 'settings') {
                 renderSettingsCategories();
                 settingsSection.classList.remove('hidden');
@@ -868,9 +990,27 @@
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('credit-card-section').classList.add('hidden');
             document.getElementById('situation-section').classList.add('hidden');
+            document.getElementById('bi-section').classList.add('hidden');
             document.getElementById('settings-section').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
             document.getElementById('nav-tabs').classList.add('hidden');
+        }
+
+        function shiftMonth(ymStr, deltaMonths) {
+            if (!ymStr) return '';
+            const [y, m] = ymStr.split('-').map(Number);
+            const totalMonths = (y * 12 + (m - 1)) + deltaMonths;
+            const newY = Math.floor(totalMonths / 12);
+            const newM = (totalMonths % 12) + 1;
+            return `${newY}-${String(newM).padStart(2, '0')}`;
+        }
+
+        function formatMonthLabel(ymStr) {
+            if (!ymStr || !ymStr.includes('-')) return ymStr;
+            const [y, m] = ymStr.split('-');
+            const names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            const idx = parseInt(m, 10) - 1;
+            return `${names[idx] || m}/${y.slice(-2)}`;
         }
 
         function getInstallmentMonths(dateStr, totalInstallments) {
@@ -907,6 +1047,33 @@
             return `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
         }
 
+        function computeCardInvoiceFromData(cardName, targetMonth, txs, abatements) {
+            let totalCredit = 0;
+            txs.forEach(t => {
+                if (t.type === 'expense' && t.payment_method === 'crédito' && (t.card_name || 'Nubank') === cardName) {
+                    const numInst = t.installments && t.installments > 0 ? t.installments : 1;
+                    const instAmount = Number(t.amount) / numInst;
+                    const instMonths = getInstallmentMonths(t.date, numInst);
+                    const matched = instMonths.find(im => im.month === targetMonth);
+                    if (matched) {
+                        totalCredit += instAmount;
+                    }
+                }
+            });
+
+            let totalAbat = 0;
+            abatements.forEach(a => {
+                if ((a.card_name || 'Nubank') === cardName) {
+                    const targetM = getTargetMonthFromDate(a.date);
+                    if (targetM === targetMonth) {
+                        totalAbat += Number(a.amount);
+                    }
+                }
+            });
+
+            return Math.max(0, totalCredit - totalAbat);
+        }
+
         async function getCardInvoiceForMonth(cardName, targetMonth) {
             const { data: creditTxs } = await supabaseClient
                 .from('transactions')
@@ -920,30 +1087,7 @@
                 .select('*')
                 .eq('card_name', cardName);
 
-            let totalCredit = 0;
-            if (creditTxs) {
-                creditTxs.forEach(t => {
-                    const numInst = t.installments && t.installments > 0 ? t.installments : 1;
-                    const instAmount = Number(t.amount) / numInst;
-                    const instMonths = getInstallmentMonths(t.date, numInst);
-                    const matched = instMonths.find(im => im.month === targetMonth);
-                    if (matched) {
-                        totalCredit += instAmount;
-                    }
-                });
-            }
-
-            let totalAbat = 0;
-            if (abatements) {
-                abatements.forEach(a => {
-                    const targetM = getTargetMonthFromDate(a.date);
-                    if (targetM === targetMonth) {
-                        totalAbat += Number(a.amount);
-                    }
-                });
-            }
-
-            return Math.max(0, totalCredit - totalAbat);
+            return computeCardInvoiceFromData(cardName, targetMonth, creditTxs || [], abatements || []);
         }
 
         async function getTotalCreditCardInvoiceForMonth(targetMonth) {
@@ -960,18 +1104,7 @@
             return totalAll;
         }
 
-        async function calculateMonthData(targetMonth) {
-            const { data: txs, error: errTxs } = await supabaseClient.from('transactions').select('*');
-            if (errTxs) {
-                console.error('Erro ao buscar transações:', errTxs);
-                return { income: 0, expense: 0, categoryExpenses: {} };
-            }
-
-            const { data: abatements, error: errAbat } = await supabaseClient.from('credit_abatements').select('*');
-            if (errAbat) {
-                console.error('Erro ao buscar abatimentos:', errAbat);
-            }
-
+        function computeMonthDataFromData(targetMonth, txs, abatements) {
             let totalIncome = 0;
             let totalExpense = 0;
             let categoryExpenses = {};
@@ -1016,7 +1149,6 @@
             if (abatements) {
                 abatements.forEach(a => {
                     const abatVal = Number(a.amount);
-                    // 1. No mês em que o abatimento é feito: entra na conta diminuindo o saldo do teto da categoria
                     if (a.date && a.date.startsWith(targetMonth)) {
                         totalExpense += abatVal;
                         categoryExpenses['Abatimento'] += abatVal;
@@ -1024,7 +1156,6 @@
                             categoryExpenses[a.category] += abatVal;
                         }
                     }
-                    // 2. No mês de referência da fatura: libera o valor naquela categoria
                     const targetM = getTargetMonthFromDate(a.date);
                     if (targetM === targetMonth && a.category && categoryExpenses[a.category] !== undefined) {
                         categoryExpenses[a.category] = Math.max(0, categoryExpenses[a.category] - abatVal);
@@ -1032,7 +1163,236 @@
                 });
             }
 
-            return { income: totalIncome, expense: totalExpense, categoryExpenses };
+            return {
+                income: totalIncome,
+                expense: totalExpense,
+                balance: totalIncome - totalExpense,
+                categoryExpenses
+            };
+        }
+
+        async function calculateMonthData(targetMonth) {
+            const { data: txs, error: errTxs } = await supabaseClient.from('transactions').select('*');
+            if (errTxs) {
+                console.error('Erro ao buscar transações:', errTxs);
+                return { income: 0, expense: 0, balance: 0, categoryExpenses: {} };
+            }
+
+            const { data: abatements, error: errAbat } = await supabaseClient.from('credit_abatements').select('*');
+            if (errAbat) {
+                console.error('Erro ao buscar abatimentos:', errAbat);
+            }
+
+            return computeMonthDataFromData(targetMonth, txs || [], abatements || []);
+        }
+
+        async function loadBI() {
+            const baseMonth = document.getElementById('bi-base-month').value;
+            const horizon = parseInt(document.getElementById('bi-horizon-months').value, 10) || 6;
+            if (!baseMonth) return;
+
+            const [{ data: txs }, { data: abatements }] = await Promise.all([
+                supabaseClient.from('transactions').select('*'),
+                supabaseClient.from('credit_abatements').select('*')
+            ]);
+
+            const allTxs = txs || [];
+            const allAbat = abatements || [];
+            rawTransactionsCache = allTxs;
+
+            const cardSet = new Set(defaultCards);
+            allTxs.forEach(t => {
+                if (t.payment_method === 'crédito' && t.card_name && t.card_name.trim() !== '') {
+                    cardSet.add(t.card_name.trim());
+                }
+            });
+            const allCards = Array.from(cardSet);
+
+            // Mês anterior para comparativo do mês base
+            const prevMonth = shiftMonth(baseMonth, -1);
+            const baseData = computeMonthDataFromData(baseMonth, allTxs, allAbat);
+            const prevData = computeMonthDataFromData(prevMonth, allTxs, allAbat);
+
+            const balanceDiff = baseData.balance - prevData.balance;
+            const expenseDiff = baseData.expense - prevData.expense;
+
+            document.getElementById('bi-kpi-balance').innerText = baseData.balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const balDiffEl = document.getElementById('bi-kpi-balance-diff');
+            balDiffEl.innerText = `${balanceDiff >= 0 ? '+' : ''}${balanceDiff.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} vs ${formatMonthLabel(prevMonth)}`;
+            balDiffEl.className = `text-xs mt-1 font-medium ${balanceDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+
+            document.getElementById('bi-kpi-expense').innerText = baseData.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const expDiffEl = document.getElementById('bi-kpi-expense-diff');
+            expDiffEl.innerText = `${expenseDiff >= 0 ? '+' : ''}${expenseDiff.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} vs ${formatMonthLabel(prevMonth)}`;
+            expDiffEl.className = `text-xs mt-1 font-medium ${expenseDiff <= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+
+            // Parcelas futuras de cartão a partir do mês base
+            let futureInstallmentsSum = 0;
+            allTxs.forEach(t => {
+                if (t.type === 'expense' && t.payment_method === 'crédito' && t.recurrence !== 'recorrente') {
+                    const numInst = t.installments && t.installments > 0 ? t.installments : 1;
+                    const instAmount = Number(t.amount) / numInst;
+                    const instMonths = getInstallmentMonths(t.date, numInst);
+                    instMonths.forEach(im => {
+                        if (im.month >= baseMonth) {
+                            futureInstallmentsSum += instAmount;
+                        }
+                    });
+                }
+            });
+            document.getElementById('bi-kpi-future-installments').innerText = futureInstallmentsSum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            // Projeção para os próximos meses a partir do mês base
+            const monthsList = [];
+            for (let i = 0; i < horizon; i++) {
+                monthsList.push(shiftMonth(baseMonth, i));
+            }
+
+            let horizonBalanceSum = 0;
+            const projectionRows = [];
+            const cardSeriesMap = {};
+            allCards.forEach(c => { cardSeriesMap[c] = []; });
+
+            monthsList.forEach(mStr => {
+                const mData = computeMonthDataFromData(mStr, allTxs, allAbat);
+                let monthCardsTotal = 0;
+                allCards.forEach(c => {
+                    const cVal = computeCardInvoiceFromData(c, mStr, allTxs, allAbat);
+                    cardSeriesMap[c].push(cVal);
+                    monthCardsTotal += cVal;
+                });
+
+                horizonBalanceSum += mData.balance;
+                projectionRows.push({
+                    month: mStr,
+                    label: formatMonthLabel(mStr),
+                    income: mData.income,
+                    expense: mData.expense,
+                    cardsTotal: monthCardsTotal,
+                    balance: mData.balance
+                });
+            });
+
+            document.getElementById('bi-kpi-horizon-balance').innerText = horizonBalanceSum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('bi-kpi-horizon-label').innerText = `Próximos ${horizon} meses`;
+
+            // Preencher tabela de perspectivas
+            const tbody = document.getElementById('bi-projection-tbody');
+            tbody.innerHTML = '';
+            projectionRows.forEach(r => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-3 font-medium text-slate-700">${r.label} <span class="text-xs text-slate-400">(${r.month})</span></td>
+                        <td class="p-3 text-right text-emerald-600 font-medium">${r.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td class="p-3 text-right text-rose-600 font-medium">${r.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td class="p-3 text-right text-indigo-600 font-medium">${r.cardsTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td class="p-3 text-right font-bold ${r.balance >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${r.balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    </tr>
+                `;
+            });
+
+            renderBICharts(projectionRows, baseData.categoryExpenses, allCards, cardSeriesMap);
+        }
+
+        function renderBICharts(projectionRows, baseCategoryExpenses, allCards, cardSeriesMap) {
+            const labels = projectionRows.map(r => r.label);
+
+            // 1. Gráfico de Fluxo e Perspectiva Mensal
+            const cashflowCtx = document.getElementById('biCashflowChart').getContext('2d');
+            if (biCashflowChartInstance) biCashflowChartInstance.destroy();
+            biCashflowChartInstance = new Chart(cashflowCtx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Receitas',
+                            data: projectionRows.map(r => r.income),
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Despesas',
+                            data: projectionRows.map(r => r.expense),
+                            backgroundColor: 'rgba(244, 63, 94, 0.8)',
+                            borderRadius: 6
+                        },
+                        {
+                            type: 'line',
+                            label: 'Saldo Previsto',
+                            data: projectionRows.map(r => r.balance),
+                            borderColor: '#4f46e5',
+                            backgroundColor: '#4f46e5',
+                            borderWidth: 2.5,
+                            tension: 0.3,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    }
+                }
+            });
+
+            // 2. Gráfico por Categoria no Mês Base
+            const catEntries = Object.entries(baseCategoryExpenses)
+                .filter(([k, v]) => k !== 'Abatimento' && v > 0)
+                .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { sensitivity: 'base' }));
+
+            const catCtx = document.getElementById('biCategoryChart').getContext('2d');
+            if (biCategoryChartInstance) biCategoryChartInstance.destroy();
+
+            const palette = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316'];
+
+            biCategoryChartInstance = new Chart(catCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: catEntries.length > 0 ? catEntries.map(e => e[0]) : ['Sem gastos'],
+                    datasets: [{
+                        data: catEntries.length > 0 ? catEntries.map(e => e[1]) : [1],
+                        backgroundColor: catEntries.length > 0 ? catEntries.map((_, idx) => palette[idx % palette.length]) : ['#e2e8f0']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+
+            // 3. Gráfico de Faturas por Cartão
+            const cardsCtx = document.getElementById('biCardsChart').getContext('2d');
+            if (biCardsChartInstance) biCardsChartInstance.destroy();
+
+            const cardDatasets = allCards.map((card, idx) => ({
+                label: card,
+                data: cardSeriesMap[card] || [],
+                borderColor: palette[idx % palette.length],
+                backgroundColor: palette[idx % palette.length],
+                tension: 0.3,
+                fill: false
+            }));
+
+            biCardsChartInstance = new Chart(cardsCtx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: cardDatasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    }
+                }
+            });
         }
 
         async function loadTransactions() {
